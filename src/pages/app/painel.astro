@@ -1,0 +1,232 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import AppHeader from "../../components/AppHeader.astro";
+import Footer from "../../components/Footer.astro";
+import { groups } from "../../data/groups";
+
+export const prerender = false;
+
+const session = Astro.cookies.get("felizNatalSession");
+if (!session) {
+  return Astro.redirect("/app/");
+}
+
+const onboardingSteps = [
+  {
+    id: 1,
+    title: "Crie um grupo",
+    description:
+      "Defina detalhes do encontro, configure datas, regras e personalize a identidade do seu grupo.",
+  },
+  {
+    id: 2,
+    title: "Chame seus amigos",
+    description:
+      "Compartilhe o link ou envie convites para que todos participem e preencham suas listas de desejos.",
+  },
+  {
+    id: 3,
+    title: "Sorteie e divirta-se!!",
+    description:
+      "Finalize o sorteio, acompanhe mensagens secretas e mantenha o clima natalino até o grande dia.",
+  },
+];
+
+const actionItems = [
+  {
+    id: 1,
+    label: "Atualizar lista de desejos",
+    status: "Em andamento",
+    badge: "3 pendências",
+  },
+  {
+    id: 2,
+    label: "Responder mensagens",
+    status: "Novas",
+    badge: "5 não lidas",
+  },
+  {
+    id: 3,
+    label: "Confirmar presença",
+    status: "Concluir hoje",
+    badge: "2 grupos",
+  },
+];
+---
+
+<Layout>
+  <div class="min-h-screen bg-transparent flex flex-col">
+    <AppHeader />
+    <main class="flex-1 mx-auto max-w-6xl space-y-10 px-6 py-12">
+      <section
+        class="space-y-6 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-8 py-10 shadow-[0_14px_32px_rgba(109,76,65,0.12)]"
+      >
+        <div
+          class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between"
+        >
+          <div class="space-y-4">
+            <p
+              class="uppercase tracking-[0.35em] text-[0.7rem] text-[var(--color-text-muted)]"
+            >
+              Boas-vindas
+            </p>
+            <h1 class="text-3xl font-semibold text-[var(--color-text)]">
+              Painel de celebrações
+            </h1>
+            <p class="max-w-2xl text-sm text-[var(--color-text-muted)]">
+              Organize os amigos secretos, acompanhe mensagens e mantenha cada
+              grupo alinhado com as celebrações deste ano. Este painel será o
+              ponto central para o seu intranet de Natal.
+            </p>
+          </div>
+
+          <div
+            class="flex w-full flex-col gap-4 lg:max-w-xs lg:justify-center lg:min-h-32"
+          >
+            <div
+              class="hidden rounded-2xl bg-[rgba(230,57,70,0.08)] px-6 py-6 text-sm text-[var(--color-text-muted)]"
+            >
+              <p class="text-[var(--color-text)]">Lembretes importantes</p>
+              <ul class="mt-4 space-y-3">
+                {
+                  actionItems.map((action) => (
+                    <li class="flex items-center justify-between rounded-lg border border-[rgba(230,57,70,0.25)] px-4 py-3">
+                      <div>
+                        <p class="font-medium text-[var(--color-text)]">
+                          {action.label}
+                        </p>
+                        <p class="text-[0.7rem] uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+                          {action.status}
+                        </p>
+                      </div>
+                      <span class="rounded-full bg-[var(--color-primary)] px-3 py-1 text-[0.65rem] font-semibold text-[var(--color-primary-foreground)]">
+                        {action.badge}
+                      </span>
+                    </li>
+                  ))
+                }
+              </ul>
+            </div>
+
+            <a
+              href="/app/grupo-novo"
+              class="scroll-fade inline-flex w-full items-center justify-center gap-3 rounded-full bg-[var(--color-primary)] px-6 py-4 font-semibold shadow-[0_10px_24px_rgba(230,57,70,0.2)] transition hover:shadow-[0_14px_28px_rgba(230,57,70,0.28)] !text-white"
+            >
+              Crie seu primeiro grupo
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                class="h-5 w-5"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M10 3.75a.75.75 0 0 1 .75.75v4.75h4.75a.75.75 0 0 1 0 1.5H10.75v4.75a.75.75 0 0 1-1.5 0V10.75H4.5a.75.75 0 0 1 0-1.5h4.75V4.5a.75.75 0 0 1 .75-.75z"
+                  clip-rule="evenodd"></path>
+              </svg>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="space-y-6">
+        <h2 class="text-2xl mb-10 font-semibold text-[var(--color-text)]">
+          Como usar a plataforma
+        </h2>
+        <div class="grid gap-6 md:grid-cols-3">
+          {
+            onboardingSteps.map((step, index) => (
+              <article class="relative overflow-visible rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 pt-12 pb-8 text-center shadow-[0_12px_26px_rgba(109,76,65,0.1)] max-md:mb-16">
+                <div class="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2">
+                  <span class="flex h-14 w-14 items-center justify-center rounded-full border border-[rgba(230,57,70,0.4)] bg-[rgba(230,57,70,0.85)] text-xl font-semibold text-[var(--color-primary-foreground)] ">
+                    {step.id}
+                  </span>
+                </div>
+                <h3 class="text-lg font-semibold text-[var(--color-text)]">
+                  {step.title}
+                </h3>
+                <p class="mt-3 text-sm text-[var(--color-text-muted)]">
+                  {step.description}
+                </p>
+                {index < onboardingSteps.length - 1 && (
+                  <div class="pointer-events-none absolute left-[45%] -bottom-2 flex translate-y-full justify-center md:left-auto md:right-[-2.2rem] md:top-1/2 md:bottom-auto md:translate-y-0 md:-translate-y-1/2 md:translate-x-0 z-10">
+                    <svg
+                      class="block h-10 w-10 text-[var(--color-text-muted)] md:hidden"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M12 5v14M6 13l6 6 6-6"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                    <svg
+                      class="hidden h-12 w-12 text-[var(--color-text-muted)] md:block"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M5 12h14M13 6l6 6-6 6"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </div>
+                )}
+              </article>
+            ))
+          }
+        </div>
+      </section>
+
+      <section class="space-y-6">
+        <div
+          class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"
+        >
+          <h2 class="text-2xl font-semibold text-[var(--color-text)]">
+            Grupos em destaque
+          </h2>
+          <a
+            href="/app/grupo-novo"
+            class="scroll-fade inline-flex items-center gap-2 rounded-full border border-[rgba(230,57,70,0.2)] px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+          >
+            Ver todos os grupos
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              class="h-4 w-4"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M3.75 10a.75.75 0 0 1 .75-.75h8.69L10.22 6.281a.75.75 0 1 1 1.06-1.062l4.25 4.25a.75.75 0 0 1 0 1.062l-4.25 4.25a.75.75 0 1 1-1.06-1.062l2.97-2.969H4.5A.75.75 0 0 1 3.75 10z"
+                clip-rule="evenodd"></path>
+            </svg>
+          </a>
+        </div>
+
+        <div
+          class="grid gap-5 md:grid-cols-2 xl:grid-cols-3"
+          hx-get="/api/grupos"
+          hx-trigger="load"
+          hx-swap="innerHTML"
+        >
+          <div
+            class="rounded-3xl border border-dashed border-[var(--color-border)] bg-[rgba(42,157,143,0.05)] px-6 py-10 text-center text-sm text-[var(--color-text-muted)]"
+          >
+            Carregando grupos...
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <Footer />
+  </div>
+</Layout>

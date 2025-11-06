@@ -1,0 +1,199 @@
+---
+import Layout from "../../layouts/Layout.astro";
+
+const supportedProviders = (
+  import.meta.env.PUBLIC_COGNITO_SUPPORTED_PROVIDERS ?? "Google"
+)
+  .split(",")
+  .map((provider) => provider.trim())
+  .filter(Boolean);
+
+const cognitoConfig = {
+  domain: import.meta.env.PUBLIC_COGNITO_DOMAIN ?? "",
+  clientId: import.meta.env.PUBLIC_COGNITO_CLIENT_ID ?? "",
+  redirectUri: import.meta.env.PUBLIC_COGNITO_REDIRECT_URI ?? "",
+  logoutUri: import.meta.env.PUBLIC_COGNITO_LOGOUT_URI ?? "",
+  region: import.meta.env.PUBLIC_COGNITO_REGION ?? "",
+  providers: supportedProviders,
+};
+
+const providerDefinitions = [
+  {
+    id: "Google",
+    name: "Google",
+    accent: "bg-white text-[#1F2937] hover:bg-[#F3F4F6]",
+  },
+];
+
+const normalizeDomain = (value = "") =>
+  value.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+const hasCognitoConfig = Boolean(
+  cognitoConfig.domain && cognitoConfig.clientId && cognitoConfig.redirectUri
+);
+
+const buildAuthorizeUrl = (provider) => {
+  if (!hasCognitoConfig) return "#";
+  const domain = normalizeDomain(cognitoConfig.domain);
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: cognitoConfig.clientId,
+    redirect_uri: cognitoConfig.redirectUri,
+    scope: "email openid profile",
+  });
+  if (provider) {
+    params.append("identity_provider", provider);
+  }
+  return `https://${domain}/oauth2/authorize?${params.toString()}`;
+};
+
+const socialProviders = providerDefinitions
+  .filter((definition) => cognitoConfig.providers.includes(definition.id))
+  .map((definition) => ({
+    ...definition,
+    href: buildAuthorizeUrl(definition.id),
+  }));
+
+const hostedLoginUrl = buildAuthorizeUrl();
+const disabledClasses = hasCognitoConfig
+  ? ""
+  : "pointer-events-none opacity-50";
+---
+
+<Layout>
+  <main
+    class="relative flex min-h-screen items-center justify-center bg-[#0f172a]"
+  >
+    <div class="absolute inset-0">
+      <div
+        class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10 mix-blend-screen"
+      >
+      </div>
+    </div>
+
+    <section
+      class="relative mx-auto flex w-full max-w-5xl flex-col gap-12 px-6 py-12 lg:flex-row lg:items-center lg:justify-between lg:px-10"
+    >
+      <article class="max-w-xl space-y-6 text-center lg:text-left">
+        <p
+          class="inline-flex items-center gap-2 rounded-full border border-blue-400/40 bg-blue-400/10 px-3 py-1 text-xs uppercase tracking-[0.3em] text-blue-200"
+        >
+          Feliz Natal SaaS
+        </p>
+        <h1 class="text-4xl font-semibold text-white sm:text-5xl">
+          Acesse seu painel seguro
+        </h1>
+        <p class="text-base leading-relaxed text-blue-100">
+          Utilizamos AWS Cognito para centralizar autenticação via Google.
+          Configure os dados do seu User Pool e entre em poucos cliques. Quando
+          quiser adicionar outros provedores, basta replicar a configuração.
+        </p>
+        <div
+          class="rounded-3xl border border-white/10 bg-white/5 px-6 py-5 text-blue-100 shadow-[0_18px_36px_rgba(15,23,42,0.4)] backdrop-blur-xl"
+        >
+          <p
+            class="text-sm font-semibold uppercase tracking-[0.25em] text-blue-200"
+          >
+            Como configurar
+          </p>
+          <ol class="mt-3 space-y-2 text-sm leading-relaxed">
+            <li>
+              1. Execute <code>cp .env.example .env</code> e preencha as variáveis
+              de Cognito.
+            </li>
+            <li>
+              2. Opcional: rode <code>./deploy.sh</code> para provisionar o stack
+              no AWS CloudFormation.
+            </li>
+            <li>
+              3. Ajuste <code>PUBLIC_COGNITO_SUPPORTED_PROVIDERS</code> conforme
+              adicionar novos provedores.
+            </li>
+          </ol>
+        </div>
+      </article>
+
+      <div
+        class="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 px-6 py-8 shadow-[0_18px_36px_rgba(15,23,42,0.4)] backdrop-blur-xl"
+      >
+        <header class="space-y-2 text-center">
+          <h2 class="text-2xl font-semibold text-white">Escolha um provedor</h2>
+          <p class="text-sm text-blue-100">
+            Você será redirecionado para a tela hospedada do Cognito.
+          </p>
+        </header>
+
+        <div class="mt-6 space-y-3">
+          {
+            socialProviders.length > 0 ? (
+              socialProviders.map((provider) => (
+                <a
+                  href={provider.href}
+                  class={`scroll-fade flex w-full items-center justify-center gap-3 rounded-full px-5 py-3 text-sm font-semibold transition ${provider.accent} ${disabledClasses}`}
+                  {...(!hasCognitoConfig ? { "aria-disabled": "true" } : {})}
+                >
+                  <span class="flex h-5 w-5 items-center justify-center">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      class="h-5 w-5"
+                      fill="none"
+                    >
+                      <path
+                        fill="#EA4335"
+                        d="M23.04 12.261c0-.815-.073-1.596-.209-2.348H12v4.444h6.24a5.337 5.337 0 0 1-2.318 3.503v2.91h3.75c2.198-2.025 3.368-5.012 3.368-8.509Z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 24c3.132 0 5.758-1.04 7.677-2.824l-3.75-2.91c-1.04.698-2.373 1.115-3.927 1.115-3.021 0-5.58-2.04-6.494-4.787H1.62v3.02C3.528 21.44 7.478 24 12 24Z"
+                      />
+                      <path
+                        fill="#4A90E2"
+                        d="M5.506 14.594A7.18 7.18 0 0 1 4.96 12c0-.902.156-1.776.546-2.594V6.386H1.62A11.996 11.996 0 0 0 0 12c0 1.934.46 3.758 1.62 5.614l3.886-3.02Z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M12 4.747c1.7 0 3.217.586 4.414 1.738l3.3-3.274C17.747 1.306 15.12 0 12 0 7.478 0 3.528 2.56 1.62 6.386l3.886 3.02C6.42 6.787 8.979 4.747 12 4.747Z"
+                      />
+                    </svg>
+                  </span>
+                  <span>Continuar com {provider.name}</span>
+                </a>
+              ))
+            ) : (
+              <p class="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-xs text-blue-100">
+                Google ainda não foi habilitado. Ajuste{" "}
+                <code>PUBLIC_COGNITO_SUPPORTED_PROVIDERS</code> para incluir{" "}
+                <code>Google</code> e preencha as variáveis do Cognito.
+              </p>
+            )
+          }
+        </div>
+
+        <div class="mt-8">
+          <div class="relative">
+            <span
+              class="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-xs uppercase tracking-[0.3em] text-blue-300"
+            >
+              Ou use e-mail e senha
+            </span>
+            <div class="h-px bg-white/15"></div>
+          </div>
+          <a
+            href={hostedLoginUrl}
+            class={`mt-6 scroll-fade flex w-full items-center justify-center rounded-full bg-blue-500 px-5 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-blue-400 ${disabledClasses}`}
+            {...!hasCognitoConfig ? { "aria-disabled": "true" } : {}}
+          >
+            Acessar com Cognito
+          </a>
+        </div>
+
+        <p class="mt-8 text-center text-xs text-blue-200/80">
+          Após a autenticação você será redirecionado para <code
+            >{cognitoConfig.redirectUri || "/auth/callback"}</code
+          >, onde o código de autorização será exibido para troca por tokens no
+          backend.
+        </p>
+      </div>
+    </section>
+  </main>
+</Layout>

@@ -1,0 +1,438 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+export const prerender = false;
+
+const env =
+  Astro.locals.cloudflare?.env ??
+  Astro.locals.runtime?.env ??
+  Astro.locals?.env ??
+  null;
+
+const session = Astro.cookies.get("felizNatalSession")?.value ?? null;
+
+const url = new URL(Astro.request.url);
+const tokenParam = url.searchParams.get("token")?.trim() ?? null;
+
+if (!tokenParam) {
+  Astro.response.status = 400;
+  return new Response("<div>Convite não encontrado.</div>", {
+    status: 400,
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
+if (!env?.DB) {
+  return new Response("<div>Banco de dados não configurado.</div>", {
+    status: 500,
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
+const conviteRow = await env.DB.prepare(
+  `SELECT
+      c.id,
+      c.grupo_id,
+      c.email,
+      c.telefone,
+      c.status,
+      c.aceito_em,
+      c.token,
+      g.slug,
+      g.titulo
+   FROM convite c
+   JOIN grupo g ON g.id = c.grupo_id
+   WHERE c.token = ?
+   LIMIT 1`
+)
+  .bind(tokenParam)
+  .first();
+
+if (!conviteRow) {
+  Astro.response.status = 404;
+  return new Response("<div>Convite inválido ou expirado.</div>", {
+    status: 404,
+    headers: { "Content-Type": "text/html; charset=utf-8" },
+  });
+}
+
+const invite = {
+  id: (conviteRow as { id: string }).id,
+  groupId: (conviteRow as { grupo_id: string }).grupo_id,
+  email: (conviteRow as { email?: string | null }).email ?? null,
+  phone: (conviteRow as { telefone?: string | null }).telefone ?? null,
+  status: (conviteRow as { status?: string | null }).status ?? "pendente",
+  acceptedAt: (conviteRow as { aceito_em?: string | null }).aceito_em ?? null,
+  token: (conviteRow as { token: string }).token,
+  groupSlug: (conviteRow as { slug: string }).slug,
+  groupTitle:
+    (conviteRow as { titulo?: string | null }).titulo ??
+    "Amigo secreto especial",
+};
+
+const supportedProviders = (
+  import.meta.env.PUBLIC_COGNITO_SUPPORTED_PROVIDERS ?? "Google"
+)
+  .split(",")
+  .map((provider) => provider.trim())
+  .filter(Boolean);
+
+const cognitoConfig = {
+  domain: import.meta.env.PUBLIC_COGNITO_DOMAIN ?? "",
+  clientId: import.meta.env.PUBLIC_COGNITO_CLIENT_ID ?? "",
+  redirectUri: import.meta.env.PUBLIC_COGNITO_REDIRECT_URI ?? "",
+  logoutUri: import.meta.env.PUBLIC_COGNITO_LOGOUT_URI ?? "",
+  region: import.meta.env.PUBLIC_COGNITO_REGION ?? "",
+  providers: supportedProviders,
+};
+
+const providerDefinitions = [
+  {
+    id: "Google",
+    name: "Google",
+    accent: "bg-white text-[#1F2937] hover:bg-[#F3F4F6]",
+  },
+];
+
+const normalizeDomain = (value = "") =>
+  value.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+const hasCognitoConfig = Boolean(
+  cognitoConfig.domain && cognitoConfig.clientId && cognitoConfig.redirectUri
+);
+
+const buildAuthorizeUrl = (provider?: string, state?: string) => {
+  if (!hasCognitoConfig) return "#";
+  const domain = normalizeDomain(cognitoConfig.domain);
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: cognitoConfig.clientId,
+    redirect_uri: cognitoConfig.redirectUri,
+    scope: "email openid profile",
+  });
+  if (provider) {
+    params.append("identity_provider", provider);
+  }
+  if (state) {
+    params.set("state", state);
+  }
+  return `https://${domain}/oauth2/authorize?${params.toString()}`;
+};
+
+const returnToPath = `/convite?token=${encodeURIComponent(invite.token)}`;
+const invitationState = `invitation:${encodeURIComponent(returnToPath)}`;
+
+const socialProviders = providerDefinitions
+  .filter((definition) => cognitoConfig.providers.includes(definition.id))
+  .map((definition) => ({
+    ...definition,
+    href: buildAuthorizeUrl(definition.id, invitationState),
+  }));
+
+const hostedLoginUrl = buildAuthorizeUrl(undefined, invitationState);
+const disabledClasses = hasCognitoConfig
+  ? ""
+  : "pointer-events-none opacity-50";
+
+let acceptanceError: string | null = null;
+
+const createNotification = async (
+  userId: string | null,
+  title: string,
+  body: string,
+  groupId: string | null = null,
+  messageId: string | null = null
+) => {
+  if (!userId || !env?.DB) return;
+  try {
+    await env.DB.prepare(
+      `INSERT INTO notificacao (id, usuario_id, grupo_id, mensagem_id, title, body, lido, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 0, ?)`
+    )
+      .bind(
+        crypto.randomUUID(),
+        userId,
+        groupId,
+        messageId,
+        title,
+        body,
+        new Date().toISOString()
+      )
+      .run();
+  } catch (error) {
+    console.error("Erro ao criar notificação:", error);
+  }
+};
+
+if (session) {
+  try {
+    const db = env.DB;
+    const agora = new Date().toISOString();
+    const userId = session;
+
+    if (invite.acceptedAt) {
+      return Astro.redirect(`/app/grupo/${invite.groupSlug}`);
+    }
+
+    const existingUser = await db
+      .prepare("SELECT id FROM usuario WHERE id = ? LIMIT 1")
+      .bind(userId)
+      .first();
+
+    let emailForUser = invite.email;
+    if (!existingUser) {
+      if (!emailForUser) {
+        emailForUser = `${userId}@placeholder.local`;
+      }
+      const nomeBase = emailForUser.includes("@")
+        ? emailForUser.split("@")[0]
+        : "Participante";
+
+      await db
+        .prepare(
+          `INSERT INTO usuario (id, nome, email, criado_em)
+           VALUES (?, ?, ?, ?)`
+        )
+        .bind(userId, nomeBase || "Participante", emailForUser, agora)
+        .run();
+    }
+
+    const participanteExistente = await db
+      .prepare(
+        "SELECT 1 FROM grupo_participante WHERE grupo_id = ? AND usuario_id = ? LIMIT 1"
+      )
+      .bind(invite.groupId, userId)
+      .first();
+
+    if (!participanteExistente) {
+      await db
+        .prepare(
+          `INSERT INTO grupo_participante (grupo_id, usuario_id, perfil, is_confirmado, is_revelado, is_ativo, criado_em, aderido_em)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .bind(
+          invite.groupId,
+          userId,
+          "convidado",
+          true,
+          false,
+          true,
+          agora,
+          agora
+        )
+        .run();
+    } else {
+      await db
+        .prepare(
+          `UPDATE grupo_participante
+           SET perfil = COALESCE(perfil, ?),
+               is_confirmado = 1,
+               is_ativo = 1,
+               aderido_em = COALESCE(aderido_em, ?)
+           WHERE grupo_id = ? AND usuario_id = ?`
+        )
+        .bind("convidado", agora, invite.groupId, userId)
+        .run();
+    }
+
+    await db
+      .prepare(
+        `UPDATE convite
+         SET status = ?, aceito_em = ?
+         WHERE id = ?`
+      )
+      .bind("aceito", agora, invite.id)
+      .run();
+
+    const participantProfile = await db
+      .prepare(
+        `SELECT COALESCE(nome, email, 'Participante') AS nome
+         FROM usuario
+         WHERE id = ?
+         LIMIT 1`
+      )
+      .bind(userId)
+      .first();
+
+    const participantDisplayName =
+      (participantProfile as { nome?: string | null })?.nome ?? "Participante";
+
+    const organizerRow = await db
+      .prepare("SELECT criado_por FROM grupo WHERE id = ? LIMIT 1")
+      .bind(invite.groupId)
+      .first();
+
+    const organizerId =
+      (organizerRow as { criado_por?: string | null })?.criado_por ?? null;
+
+    if (organizerId) {
+      await createNotification(
+        organizerId,
+        "Convite Aceito",
+        `${participantDisplayName} aceitou o convite. Veja mais`,
+        invite.groupId
+      );
+    }
+
+    return Astro.redirect(`/app/grupo/${invite.groupSlug}`);
+  } catch (error) {
+    console.error("Erro ao aceitar convite:", error);
+    acceptanceError =
+      "Não foi possível confirmar sua participação. Tente novamente.";
+  }
+}
+---
+
+<Layout>
+  <main
+    class="relative flex min-h-screen items-center justify-center bg-[#0f172a]"
+  >
+    <div class="absolute inset-0">
+      <div
+        class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10 mix-blend-screen"
+      >
+      </div>
+    </div>
+
+    <section
+      class="relative mx-auto flex w-full max-w-5xl flex-col gap-12 px-6 py-12 lg:flex-row lg:items-center lg:justify-between lg:px-10"
+    >
+      <article class="max-w-xl space-y-6 text-center lg:text-left">
+        <p
+          class="inline-flex items-center gap-2 rounded-full border border-blue-400/40 bg-blue-400/10 px-3 py-1 text-xs uppercase tracking-[0.3em] text-blue-200"
+        >
+          Convite especial
+        </p>
+        <h1 class="text-4xl font-semibold text-white sm:text-5xl">
+          Você foi convidado para participar de um amigo secreto
+        </h1>
+        <p class="text-base leading-relaxed text-blue-100">
+          O grupo <strong class="text-blue-200">{invite.groupTitle}</strong> está
+          aguardando você. Para confirmar, faça o login com sua conta e finalize
+          o convite.
+        </p>
+        <div
+          class="rounded-3xl border border-white/10 bg-white/5 px-6 py-5 text-blue-100 shadow-[0_18px_36px_rgba(15,23,42,0.4)] backdrop-blur-xl"
+        >
+          <p
+            class="text-sm font-semibold uppercase tracking-[0.25em] text-blue-200"
+          >
+            Sobre seu convite
+          </p>
+          <ul class="mt-3 space-y-2 text-sm leading-relaxed">
+            <li>
+              <span class="text-blue-200/80">E-mail convidado:</span>
+              <span class="ml-2 font-medium text-blue-50">
+                {invite.email ?? "Não informado"}
+              </span>
+            </li>
+            <li>
+              <span class="text-blue-200/80">Telefone:</span>
+              <span class="ml-2 font-medium text-blue-50">
+                {invite.phone ?? "Não informado"}
+              </span>
+            </li>
+            <li>
+              <span class="text-blue-200/80">Status atual:</span>
+              <span
+                class="ml-2 font-medium text-blue-50 uppercase tracking-[0.2em]"
+              >
+                {invite.acceptedAt ? "Aceito" : "Pendente"}
+              </span>
+            </li>
+          </ul>
+        </div>
+      </article>
+
+      <div
+        class="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 px-6 py-8 shadow-[0_18px_36px_rgba(15,23,42,0.4)] backdrop-blur-xl"
+      >
+        <header class="space-y-2 text-center">
+          <h2 class="text-2xl font-semibold text-white">
+            Confirme sua participação
+          </h2>
+          <p class="text-sm text-blue-100">
+            Faça login para entrar no grupo e visualizar os detalhes completos.
+          </p>
+        </header>
+
+        {
+          acceptanceError ? (
+            <div class="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+              {acceptanceError}
+            </div>
+          ) : null
+        }
+
+        <div class="mt-6 space-y-3">
+          {
+            socialProviders.length > 0 ? (
+              socialProviders.map((provider) => (
+                <a
+                  href={provider.href}
+                  class={`scroll-fade flex w-full items-center justify-center gap-3 rounded-full px-5 py-3 text-sm font-semibold transition ${provider.accent} ${disabledClasses}`}
+                  {...(!hasCognitoConfig ? { "aria-disabled": "true" } : {})}
+                >
+                  <span class="flex h-5 w-5 items-center justify-center">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      class="h-5 w-5"
+                      fill="none"
+                    >
+                      <path
+                        fill="#EA4335"
+                        d="M23.04 12.261c0-.815-.073-1.596-.209-2.348H12v4.444h6.24a5.337 5.337 0 0 1-2.318 3.503v2.91h3.75c2.198-2.025 3.368-5.012 3.368-8.509Z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 24c3.132 0 5.758-1.04 7.677-2.824l-3.75-2.91c-1.04.698-2.373 1.115-3.927 1.115-3.021 0-5.58-2.04-6.494-4.787H1.62v3.02C3.528 21.44 7.478 24 12 24Z"
+                      />
+                      <path
+                        fill="#4A90E2"
+                        d="M5.506 14.594A7.18 7.18 0 0 1 4.96 12c0-.902.156-1.776.546-2.594V6.386H1.62A11.996 11.996 0 0 0 0 12c0 1.934.46 3.758 1.62 5.614l3.886-3.02Z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M12 4.747c1.7 0 3.217.586 4.414 1.738l3.3-3.274C17.747 1.306 15.12 0 12 0 7.478 0 3.528 2.56 1.62 6.386l3.886 3.02C6.42 6.787 8.979 4.747 12 4.747Z"
+                      />
+                    </svg>
+                  </span>
+                  <span>Continuar com {provider.name}</span>
+                </a>
+              ))
+            ) : (
+              <p class="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-xs text-blue-100">
+                Google ainda não foi habilitado. Ajuste
+                <code>PUBLIC_COGNITO_SUPPORTED_PROVIDERS</code> para incluir
+                <code>Google</code> e preencha as variáveis do Cognito.
+              </p>
+            )
+          }
+        </div>
+
+        <div class="mt-8">
+          <div class="relative">
+            <span
+              class="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-xs uppercase tracking-[0.3em] text-blue-300"
+            >
+              ou confirme com e-mail e senha
+            </span>
+            <div class="h-px bg-white/15"></div>
+          </div>
+          <a
+            href={hostedLoginUrl}
+            class={`mt-6 scroll-fade flex w-full items-center justify-center rounded-full bg-blue-500 px-5 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-blue-400 ${disabledClasses}`}
+            {...!hasCognitoConfig ? { "aria-disabled": "true" } : {}}
+          >
+            Acessar com Cognito
+          </a>
+        </div>
+
+        <p class="mt-8 text-center text-xs text-blue-200/80">
+          Após o login, atualizaremos seu convite automaticamente e levaremos
+          você para a página do grupo.
+        </p>
+      </div>
+    </section>
+  </main>
+</Layout>
