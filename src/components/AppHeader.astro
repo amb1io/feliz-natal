@@ -1,0 +1,199 @@
+---
+import Logo from "./Logo.astro";
+import Notifications from "./Notifications.astro";
+
+const menuItems = [
+  { label: "Criar Grupo", href: "/app/grupo-novo", variant: "primary" },
+  { label: "Meus Grupos", href: "/app/grupos", variant: "default" },
+  { label: "Lista de Desejos", href: "#", variant: "default" },
+];
+
+const logout = () => {
+  if (typeof document !== "undefined") {
+    document.cookie = "felizNatalSession=; path=/; max-age=0; SameSite=Lax";
+  }
+  return "/app/";
+};
+---
+
+<header
+  class="border-b border-[var(--color-border)] bg-[var(--color-surface)] backdrop-blur relative z-30"
+>
+  <div
+    x-data="{ mobileOpen: false }"
+    class="mx-auto flex max-w-6xl flex-col gap-3 px-6 py-4 transition-[max-height] duration-150 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+    @keydown.escape.window="mobileOpen = false"
+  >
+    <div class="flex items-center justify-between gap-4">
+      <Logo />
+
+      <div class="flex items-center gap-3">
+        <div class="sm:hidden">
+          <Notifications />
+        </div>
+
+        <button
+          type="button"
+          class="scroll-fade inline-flex h-11 w-11 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-text)] hover:text-white sm:hidden"
+          x-bind:aria-expanded="mobileOpen"
+          aria-controls="app-nav-mobile"
+          @click="mobileOpen = !mobileOpen"
+        >
+          <svg
+            x-show="!mobileOpen"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="1.5"
+            stroke="currentColor"
+            class="h-5 w-5"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12"></path>
+          </svg>
+          <svg
+            x-cloak
+            x-show="mobileOpen"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="1.5"
+            stroke="currentColor"
+            class="h-5 w-5"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M6 18 18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <nav class="hidden items-center justify-between text-sm sm:flex">
+      <div class="flex items-center gap-2">
+        {
+          menuItems.map((item) => (
+            <a
+              href={item.href}
+              class={[
+                "inline-flex items-center gap-2 rounded-full px-4 py-2 font-medium scroll-fade",
+                item.variant === "primary"
+                  ? "bg-[var(--color-primary)] text-[var(--color-primary-foreground)] "
+                  : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]",
+              ]}
+            >
+              {item.label}
+            </a>
+          ))
+        }
+      </div>
+
+      <div class="hidden sm:block">
+        <div class="flex items-center gap-3">
+          <Notifications />
+          <button
+            type="button"
+            class="scroll-fade inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+            data-logout-button
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke-width="1.5"
+              stroke="currentColor"
+              class="h-4 w-4"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6A2.25 2.25 0 0 0 5.25 5.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15"
+              ></path>
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M12 9l4.5 3-4.5 3M3 12h13.5"></path>
+            </svg>
+            Sair
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <nav
+      id="app-nav-mobile"
+      x-cloak
+      x-show="mobileOpen"
+      x-transition:enter="transition ease-out duration-150"
+      x-transition:enter-start="opacity-0 -translate-y-2"
+      x-transition:enter-end="opacity-100 translate-y-0"
+      x-transition:leave="transition ease-in duration-100"
+      x-transition:leave-start="opacity-100 translate-y-0"
+      x-transition:leave-end="opacity-0 -translate-y-2"
+      @click.outside="mobileOpen = false"
+      class="sm:hidden"
+    >
+      <div
+        class="flex flex-col gap-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm shadow-[0_16px_30px_rgba(109,76,65,0.12)] backdrop-blur"
+      >
+        {
+          menuItems.map((item) => (
+            <a
+              href={item.href}
+              class={[
+                "inline-flex items-center gap-2 rounded-xl px-4 py-2 font-medium scroll-fade",
+                item.variant === "primary"
+                  ? "bg-[var(--color-primary)] text-[var(--color-primary-foreground)] shadow-[0_8px_16px_rgba(230,57,70,0.18)]"
+                  : "text-[var(--color-text-muted)] hover:text-[var(--color-text)] bg-[rgba(42,157,143,0.08)]",
+              ]}
+              @click="mobileOpen = false"
+            >
+              {item.label}
+            </a>
+          ))
+        }
+        <button
+          type="button"
+          class="inline-flex items-center gap-2 rounded-xl px-4 py-2 font-medium scroll-fade text-[var(--color-text-muted)] hover:text-[var(--color-text)] bg-[rgba(42,157,143,0.08)]"
+          data-logout-button
+          @click="mobileOpen = false"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke-width="1.5"
+            stroke="currentColor"
+            class="h-4 w-4"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6A2.25 2.25 0 0 0 5.25 5.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15"
+            ></path>
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M12 9l4.5 3-4.5 3M3 12h13.5"></path>
+          </svg>
+          Sair
+        </button>
+      </div>
+    </nav>
+  </div>
+
+  <script>
+    if (typeof window !== "undefined") {
+      const handleLogout = () => {
+        document.cookie = "felizNatalSession=; path=/; max-age=0; SameSite=Lax";
+        window.location.replace("/app/");
+      };
+      document.querySelectorAll("[data-logout-button]").forEach((button) => {
+        button.addEventListener("click", handleLogout);
+      });
+    }
+  </script>
+</header>
