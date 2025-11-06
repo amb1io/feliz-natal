@@ -1,0 +1,17 @@
+---
+const { avatar, message, showConnector = false } = Astro.props;
+---
+
+<div class="grid grid-cols-[auto_1fr] items-start gap-4">
+	<div class="relative flex flex-col items-center">
+	<span class="flex h-12 w-12 items-center justify-center rounded-full border border-[rgba(230,57,70,0.35)] bg-[rgba(230,57,70,0.12)] text-xs font-semibold uppercase text-[var(--color-primary)] ">
+			{avatar}
+		</span>
+		{showConnector && (
+			<span class="mt-2 h-12 w-px border-l-2 border-dashed border-[rgba(148,163,184,0.3)]" />
+		)}
+	</div>
+	<div class="rounded-2xl border border-[rgba(42,157,143,0.25)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text-muted)] shadow-[0_8px_18px_rgba(109,76,65,0.08)]">
+		<p>{message}</p>
+	</div>
+</div>

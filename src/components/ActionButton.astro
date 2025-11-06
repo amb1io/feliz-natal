@@ -1,0 +1,26 @@
+---
+const { label, href = null } = Astro.props;
+
+const baseClasses =
+	"group relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-[rgba(148,163,184,0.35)] text-xs font-medium text-[rgba(148,163,184,0.7)] transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-0 hover:w-28 hover:justify-start pl-3 pr-4";
+const iconClasses =
+	"flex h-5 w-5 items-center justify-center text-[rgba(148,163,184,0.7)] transition-colors duration-200 group-hover:text-[var(--color-primary)]";
+const labelClasses =
+	"ml-2 max-w-0 overflow-hidden text-xs text-[var(--color-text)] opacity-0 transition-all duration-200 group-hover:max-w-[6rem] group-hover:opacity-100";
+---
+
+{href ? (
+	<a href={href} class={baseClasses} role="button">
+		<span class={iconClasses}>
+			<slot name="icon" />
+		</span>
+		<span class={labelClasses}>{label}</span>
+	</a>
+) : (
+	<button type="button" class={baseClasses}>
+		<span class={iconClasses}>
+			<slot name="icon" />
+		</span>
+		<span class={labelClasses}>{label}</span>
+	</button>
+)}
