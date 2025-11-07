@@ -1,6 +1,6 @@
 # Feliz Natal – SaaS Panel with AWS Cognito Login
 
-This repository contains the Feliz Natal intranet built with **Astro** alongside an **AWS Cognito** setup for Google social sign-in. The goal is to offer a festive dashboard experience while providing a production-ready authentication flow backed by Amazon Cognito.
+This repository contains the Feliz Natal intranet built with **Astro** alongside an **AWS Cognito** setup for Google social sign-in. The goal is to offer a festive dashboard experience while providing a production-ready authentication flow backed by Amazon Cognito..
 
 ---
 
@@ -84,15 +84,15 @@ Use the Google section in `.env.example` for detailed pointers to the developer 
 
 Set the following keys in `.env` (or your hosting provider secrets):
 
-| Variable | Purpose |
-| --- | --- |
-| `PUBLIC_COGNITO_DOMAIN` | Cognito Hosted UI domain (sem `https://`), e.g. `feliz-natal-demo.auth.us-east-1.amazoncognito.com` |
-| `PUBLIC_COGNITO_CLIENT_ID` | App client ID |
-| `PUBLIC_COGNITO_REDIRECT_URI` | Callback route (defaults to `http://localhost:4321/auth/callback`) |
-| `PUBLIC_COGNITO_LOGOUT_URI` | Optional logout destination |
-| `PUBLIC_COGNITO_REGION` | AWS region (display only) |
-| `PUBLIC_COGNITO_SUPPORTED_PROVIDERS` | Comma-separated list of providers to render (`Google` by default) |
-| `DATABASE_URL` | Prisma connection string. For local/dev use `file:./prisma/dev.db` (SQLite/D1-compatible). |
+| Variable                             | Purpose                                                                                             |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| `PUBLIC_COGNITO_DOMAIN`              | Cognito Hosted UI domain (sem `https://`), e.g. `feliz-natal-demo.auth.us-east-1.amazoncognito.com` |
+| `PUBLIC_COGNITO_CLIENT_ID`           | App client ID                                                                                       |
+| `PUBLIC_COGNITO_REDIRECT_URI`        | Callback route (defaults to `http://localhost:4321/auth/callback`)                                  |
+| `PUBLIC_COGNITO_LOGOUT_URI`          | Optional logout destination                                                                         |
+| `PUBLIC_COGNITO_REGION`              | AWS region (display only)                                                                           |
+| `PUBLIC_COGNITO_SUPPORTED_PROVIDERS` | Comma-separated list of providers to render (`Google` by default)                                   |
+| `DATABASE_URL`                       | Prisma connection string. For local/dev use `file:./prisma/dev.db` (SQLite/D1-compatible).          |
 
 Restart `npm run dev` after modifying environment variables.
 
