@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "AWS Cognito User Pool with Google Social Identity Provider"
+Description: "AWS Cognito User Pool with Google and Microsoft Social Identity Providers"
 
 Parameters:
   UserPoolName:
@@ -17,6 +17,33 @@ Parameters:
     NoEcho: true
     Default: "YOUR_GOOGLE_CLIENT_SECRET"
     Description: Google OAuth Client Secret
+
+  MicrosoftClientId:
+    Type: String
+    Default: "YOUR_MICROSOFT_CLIENT_ID"
+    Description: Microsoft Entra ID (Azure AD) Application (client) ID
+
+  MicrosoftClientSecret:
+    Type: String
+    NoEcho: true
+    Default: "YOUR_MICROSOFT_CLIENT_SECRET"
+    Description: Microsoft Entra ID (Azure AD) client secret
+
+  MicrosoftTenantId:
+    Type: String
+    Default: "common"
+    Description: Microsoft Entra tenant ID (use 'common' for multi-tenant apps)
+
+  SlackClientId:
+    Type: String
+    Default: "YOUR_SLACK_CLIENT_ID"
+    Description: Slack App Client ID
+
+  SlackClientSecret:
+    Type: String
+    NoEcho: true
+    Default: "YOUR_SLACK_CLIENT_SECRET"
+    Description: Slack App Client Secret
 
   CallbackURLs:
     Type: CommaDelimitedList
@@ -88,11 +115,50 @@ Resources:
         username: sub
         picture: picture
 
+  # Microsoft Identity Provider
+  MicrosoftIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Properties:
+      UserPoolId: !Ref UserPool
+      ProviderName: Microsoft
+      ProviderType: OIDC
+      ProviderDetails:
+        client_id: !Ref MicrosoftClientId
+        client_secret: !Ref MicrosoftClientSecret
+        authorize_scopes: "openid profile email"
+        attributes_request_method: "GET"
+        oidc_issuer: !Sub "https://login.microsoftonline.com/${MicrosoftTenantId}/v2.0"
+      AttributeMapping:
+        email: email
+        name: name
+        username: sub
+        picture: picture
+
+  # Slack Identity Provider
+  SlackIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Properties:
+      UserPoolId: !Ref UserPool
+      ProviderName: Slack
+      ProviderType: OIDC
+      ProviderDetails:
+        client_id: !Ref SlackClientId
+        client_secret: !Ref SlackClientSecret
+        authorize_scopes: "openid profile email"
+        attributes_request_method: "GET"
+        oidc_issuer: "https://slack.com"
+      AttributeMapping:
+        email: email
+        name: name
+        username: sub
+
   # App Client
   UserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     DependsOn:
       - GoogleIdentityProvider
+      - MicrosoftIdentityProvider
+      - SlackIdentityProvider
     Properties:
       ClientName: feliz-natal-app-client
       UserPoolId: !Ref UserPool
@@ -111,6 +177,8 @@ Resources:
       SupportedIdentityProviders:
         - COGNITO
         - Google
+        - Microsoft
+        - Slack
       CallbackURLs: !Ref CallbackURLs
       LogoutURLs: !Ref LogoutURLs
       AllowedOAuthFlows:

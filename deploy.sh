@@ -19,6 +19,11 @@ aws cloudformation deploy \
         UserPoolName=$USER_POOL_NAME \
         GoogleClientId=$GOOGLE_CLIENT_ID \
         GoogleClientSecret=$GOOGLE_CLIENT_SECRET \
+        MicrosoftClientId=$MICROSOFT_CLIENT_ID \
+        MicrosoftClientSecret=$MICROSOFT_CLIENT_SECRET \
+        MicrosoftTenantId=$MICROSOFT_TENANT_ID \
+        SlackClientId=$SLACK_CLIENT_ID \
+        SlackClientSecret=$SLACK_CLIENT_SECRET \
         CallbackURLs=$CALLBACK_URLS \
         LogoutURLs=$LOGOUT_URLS \
     --capabilities CAPABILITY_IAM \
