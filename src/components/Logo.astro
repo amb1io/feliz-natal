@@ -1,7 +1,21 @@
+---
+import { Image } from "astro:assets";
+import logoAlternativo from "../assets/logo-alternativo.png";
+---
+
 <a
-	href="/app/painel"
-	class="inline-flex items-center gap-2 rounded-full bg-[rgba(148,163,184,0.08)] px-4 py-2 text-sm font-semibold uppercase tracking-[0.32em] text-[var(--color-text)]"
+  href="/app/painel"
+  class="inline-flex items-center bg-transparent"
+  aria-label="Feliz Natal"
 >
-	<span class="text-[var(--color-primary)] drop-shadow-[0_0_12px_rgba(230,57,70,0.6)]">Feliz</span>
-	<span>Natal</span>
+  <Image
+    src={logoAlternativo}
+    alt="Feliz Natal"
+    width={1024}
+    height={1024}
+    loading="eager"
+    decoding="async"
+    class="h-16 w-auto"
+    formats={["avif", "webp", "png"]}
+  />
 </a>

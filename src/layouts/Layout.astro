@@ -1,26 +1,62 @@
 ---
-import '../styles/global.css';
+import "../styles/global.css";
+
+const siteMetadata = {
+  title: "Feliz Natal SaaS · Organize seu Amigo Secreto",
+  description:
+    "Gerencie sorteios, convites e listas de presentes em um painel inteligente feito para celebrar o Natal sem stress.",
+  url: "https://feliz.natal.br/",
+  imagePath: "/logo-alternativo.png",
+};
+
+const absoluteOgImage = new URL(
+  siteMetadata.imagePath,
+  siteMetadata.url
+).toString();
 ---
 
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro Basics</title>
-	</head>
-	<body>
-		<slot />
-	</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{siteMetadata.title}</title>
+    <meta name="description" content={siteMetadata.description} />
+    <meta
+      name="keywords"
+      content="amigo secreto, natal, sorteio automático, convites, listas de presentes"
+    />
+    <meta name="author" content="Feliz Natal SaaS" />
+    <meta name="robots" content="index,follow" />
+    <link rel="canonical" href={siteMetadata.url} />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Feliz Natal SaaS" />
+    <meta property="og:title" content={siteMetadata.title} />
+    <meta property="og:description" content={siteMetadata.description} />
+    <meta property="og:url" content={siteMetadata.url} />
+    <meta property="og:image" content={absoluteOgImage} />
+    <meta property="og:image:alt" content="Logo Feliz Natal SaaS" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={siteMetadata.title} />
+    <meta name="twitter:description" content={siteMetadata.description} />
+    <meta name="twitter:image" content={absoluteOgImage} />
+    <meta name="twitter:site" content="@feliznatal" />
+    <meta name="twitter:creator" content="@feliznatal" />
+  </head>
+  <body>
+    <slot />
+  </body>
 </html>
 
 <style>
-	html,
-	body {
-		margin: 0;
-		width: 100%;
-		height: 100%;
-	}
+  html,
+  body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+  }
 </style>

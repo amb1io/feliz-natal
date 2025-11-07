@@ -21,7 +21,20 @@ const providerDefinitions = [
   {
     id: "Google",
     name: "Google",
-    accent: "bg-white text-[#1F2937] hover:bg-[#F3F4F6]",
+    accent: "bg-white text-[#1F2937] hover:bg-[#F3F4F6] border border-gray-300",
+    icon: "google",
+  },
+  {
+    id: "Microsoft",
+    name: "Microsoft",
+    accent: "bg-[#2563EB] !text-white hover:bg-[#1D4ED8]",
+    icon: "microsoft",
+  },
+  {
+    id: "Slack",
+    name: "Slack",
+    accent: "bg-[#1A1D21] !text-white hover:bg-[#0F1114]",
+    icon: "slack",
   },
 ];
 
@@ -53,7 +66,6 @@ const socialProviders = providerDefinitions
     href: buildAuthorizeUrl(definition.id),
   }));
 
-const hostedLoginUrl = buildAuthorizeUrl();
 const disabledClasses = hasCognitoConfig
   ? ""
   : "pointer-events-none opacity-50";
@@ -61,64 +73,39 @@ const disabledClasses = hasCognitoConfig
 
 <Layout>
   <main
-    class="relative flex min-h-screen items-center justify-center bg-[#0f172a]"
+    class="flex min-h-screen items-center justify-center bg-[var(--color-background)] bg-cover bg-no-repeat bg-center px-6 py-12"
+    style={`background-image: url('/login-bg.svg');`}
   >
-    <div class="absolute inset-0">
-      <div
-        class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10 mix-blend-screen"
-      >
-      </div>
-    </div>
-
     <section
-      class="relative mx-auto flex w-full max-w-5xl flex-col gap-12 px-6 py-12 lg:flex-row lg:items-center lg:justify-between lg:px-10"
+      class="mx-auto grid w-full max-w-6xl gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center"
     >
-      <article class="max-w-xl space-y-6 text-center lg:text-left">
+      <article class="space-y-6 text-center lg:text-left">
         <p
-          class="inline-flex items-center gap-2 rounded-full border border-blue-400/40 bg-blue-400/10 px-3 py-1 text-xs uppercase tracking-[0.3em] text-blue-200"
+          class="inline-flex items-center gap-2 rounded-full border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-primary)]"
         >
-          Feliz Natal SaaS
+          Feliz Natal
         </p>
-        <h1 class="text-4xl font-semibold text-white sm:text-5xl">
-          Acesse seu painel seguro
+        <h1 class="text-4xl font-semibold text-[var(--color-text)] sm:text-5xl">
+          Comece a diversão do seu Amigo Secreto 🎄
         </h1>
-        <p class="text-base leading-relaxed text-blue-100">
-          Utilizamos AWS Cognito para centralizar autenticação via Google.
-          Configure os dados do seu User Pool e entre em poucos cliques. Quando
-          quiser adicionar outros provedores, basta replicar a configuração.
-        </p>
-        <div
-          class="rounded-3xl border border-white/10 bg-white/5 px-6 py-5 text-blue-100 shadow-[0_18px_36px_rgba(15,23,42,0.4)] backdrop-blur-xl"
+        <p
+          class="text-base leading-relaxed text-[var(--color-text-muted)] text-shadow-gray-300 text-shadow-2xs"
         >
-          <p
-            class="text-sm font-semibold uppercase tracking-[0.25em] text-blue-200"
-          >
-            Como configurar
-          </p>
-          <ol class="mt-3 space-y-2 text-sm leading-relaxed">
-            <li>
-              1. Execute <code>cp .env.example .env</code> e preencha as variáveis
-              de Cognito.
-            </li>
-            <li>
-              2. Opcional: rode <code>./deploy.sh</code> para provisionar o stack
-              no AWS CloudFormation.
-            </li>
-            <li>
-              3. Ajuste <code>PUBLIC_COGNITO_SUPPORTED_PROVIDERS</code> conforme
-              adicionar novos provedores.
-            </li>
-          </ol>
-        </div>
+          🎅✨ Entre no clima natalino! Faça login e crie agora seu grupo de
+          Amigo Secreto 🎁 Organize, convide os amigos e descubra quem vai te
+          presentear neste Natal cheio de diversão e surpresas! 💫
+        </p>
       </article>
 
       <div
-        class="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 px-6 py-8 shadow-[0_18px_36px_rgba(15,23,42,0.4)] backdrop-blur-xl"
+        class="w-full rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-8 text-[var(--color-text)] shadow-[0_18px_36px_rgba(109,76,65,0.12)]"
       >
         <header class="space-y-2 text-center">
-          <h2 class="text-2xl font-semibold text-white">Escolha um provedor</h2>
-          <p class="text-sm text-blue-100">
-            Você será redirecionado para a tela hospedada do Cognito.
+          <h2 class="text-2xl font-semibold text-[var(--color-text)]">
+            Escolha uma forma de login
+          </h2>
+          <p class="text-sm text-[var(--color-text-muted)]">
+            Você será redirecionado para a tela do provedor escolhido.
           </p>
         </header>
 
@@ -132,66 +119,87 @@ const disabledClasses = hasCognitoConfig
                   {...(!hasCognitoConfig ? { "aria-disabled": "true" } : {})}
                 >
                   <span class="flex h-5 w-5 items-center justify-center">
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      class="h-5 w-5"
-                      fill="none"
-                    >
-                      <path
-                        fill="#EA4335"
-                        d="M23.04 12.261c0-.815-.073-1.596-.209-2.348H12v4.444h6.24a5.337 5.337 0 0 1-2.318 3.503v2.91h3.75c2.198-2.025 3.368-5.012 3.368-8.509Z"
-                      />
-                      <path
-                        fill="#34A853"
-                        d="M12 24c3.132 0 5.758-1.04 7.677-2.824l-3.75-2.91c-1.04.698-2.373 1.115-3.927 1.115-3.021 0-5.58-2.04-6.494-4.787H1.62v3.02C3.528 21.44 7.478 24 12 24Z"
-                      />
-                      <path
-                        fill="#4A90E2"
-                        d="M5.506 14.594A7.18 7.18 0 0 1 4.96 12c0-.902.156-1.776.546-2.594V6.386H1.62A11.996 11.996 0 0 0 0 12c0 1.934.46 3.758 1.62 5.614l3.886-3.02Z"
-                      />
-                      <path
-                        fill="#FBBC05"
-                        d="M12 4.747c1.7 0 3.217.586 4.414 1.738l3.3-3.274C17.747 1.306 15.12 0 12 0 7.478 0 3.528 2.56 1.62 6.386l3.886 3.02C6.42 6.787 8.979 4.747 12 4.747Z"
-                      />
-                    </svg>
+                    {provider.icon === "microsoft" && (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        class="h-5 w-5"
+                      >
+                        <path fill="#F35325" d="M11.5 11.5H2V2h9.5v9.5Z" />
+                        <path fill="#81BC06" d="M22 11.5h-9.5V2H22v9.5Z" />
+                        <path fill="#05A6F0" d="M11.5 22H2v-9.5h9.5V22Z" />
+                        <path fill="#FFBA08" d="M22 22h-9.5v-9.5H22V22Z" />
+                      </svg>
+                    )}
+                    {provider.icon === "slack" && (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        class="h-5 w-5"
+                        fill="none"
+                      >
+                        <path
+                          fill="#E01E5A"
+                          d="M9.143 2c-.79 0-1.429.64-1.429 1.429 0 .79.64 1.429 1.429 1.429h1.429V3.429C10.572 2.64 9.933 2 9.143 2Zm0 4.286H3.429C2.64 6.286 2 6.926 2 7.714c0 .79.64 1.429 1.429 1.429h5.714c.79 0 1.429-.64 1.429-1.429 0-.788-.64-1.428-1.429-1.428Z"
+                        />
+                        <path
+                          fill="#36C5F0"
+                          d="M21.999 9.143c0-.79-.64-1.429-1.429-1.429-.79 0-1.429.64-1.429 1.429v1.429h1.429c.79 0 1.429-.639 1.429-1.429Zm-4.286 0V3.429c0-.79-.64-1.429-1.429-1.429-.79 0-1.429.64-1.429 1.429v5.714c0 .79.64 1.429 1.429 1.429.788 0 1.428-.64 1.428-1.429Z"
+                        />
+                        <path
+                          fill="#2EB67D"
+                          d="M14.857 22c.79 0 1.429-.64 1.429-1.429 0-.79-.64-1.429-1.429-1.429h-1.429v1.429c0 .79.639 1.429 1.429 1.429Zm0-4.286h5.714c.79 0 1.429-.64 1.429-1.429 0-.79-.64-1.429-1.429-1.429h-5.714c-.79 0-1.429.64-1.429 1.429 0 .788.64 1.428 1.429 1.428Z"
+                        />
+                        <path
+                          fill="#ECB22E"
+                          d="M2 14.857c0 .79.64 1.429 1.429 1.429.79 0 1.429-.64 1.429-1.429v-1.429H3.429C2.64 13.428 2 14.067 2 14.857Zm4.286 0v5.714c0 .79.64 1.429 1.429 1.429.79 0 1.429-.64 1.429-1.429v-5.714c0-.79-.64-1.429-1.429-1.429-.788 0-1.428.64-1.428 1.429Z"
+                        />
+                      </svg>
+                    )}
+                    {provider.icon === "google" && (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        class="h-5 w-5"
+                        fill="none"
+                      >
+                        <path
+                          fill="#EA4335"
+                          d="M23.04 12.261c0-.815-.073-1.596-.209-2.348H12v4.444h6.24a5.337 5.337 0 0 1-2.318 3.503v2.91h3.75c2.198-2.025 3.368-5.012 3.368-8.509Z"
+                        />
+                        <path
+                          fill="#34A853"
+                          d="M12 24c3.132 0 5.758-1.04 7.677-2.824l-3.75-2.91c-1.04.698-2.373 1.115-3.927 1.115-3.021 0-5.58-2.04-6.494-4.787H1.62v3.02C3.528 21.44 7.478 24 12 24Z"
+                        />
+                        <path
+                          fill="#4A90E2"
+                          d="M5.506 14.594A7.18 7.18 0 0 1 4.96 12c0-.902.156-1.776.546-2.594V6.386H1.62A11.996 11.996 0 0 0 0 12c0 1.934.46 3.758 1.62 5.614l3.886-3.02Z"
+                        />
+                        <path
+                          fill="#FBBC05"
+                          d="M12 4.747c1.7 0 3.217.586 4.414 1.738l3.3-3.274C17.747 1.306 15.12 0 12 0 7.478 0 3.528 2.56 1.62 6.386l3.886 3.02C6.42 6.787 8.979 4.747 12 4.747Z"
+                        />
+                      </svg>
+                    )}
                   </span>
                   <span>Continuar com {provider.name}</span>
                 </a>
               ))
             ) : (
-              <p class="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-center text-xs text-blue-100">
-                Google ainda não foi habilitado. Ajuste{" "}
+              <p class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-center text-xs text-[var(--color-text-muted)]">
+                Nenhum provedor social foi habilitado. Ajuste{" "}
                 <code>PUBLIC_COGNITO_SUPPORTED_PROVIDERS</code> para incluir{" "}
-                <code>Google</code> e preencha as variáveis do Cognito.
+                <code>Google</code>, <code>Microsoft</code> e/ou{" "}
+                <code>Slack</code> e preencha as variáveis do Cognito.
               </p>
             )
           }
         </div>
 
-        <div class="mt-8">
-          <div class="relative">
-            <span
-              class="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-xs uppercase tracking-[0.3em] text-blue-300"
-            >
-              Ou use e-mail e senha
-            </span>
-            <div class="h-px bg-white/15"></div>
-          </div>
-          <a
-            href={hostedLoginUrl}
-            class={`mt-6 scroll-fade flex w-full items-center justify-center rounded-full bg-blue-500 px-5 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-blue-400 ${disabledClasses}`}
-            {...!hasCognitoConfig ? { "aria-disabled": "true" } : {}}
-          >
-            Acessar com Cognito
-          </a>
-        </div>
-
-        <p class="mt-8 text-center text-xs text-blue-200/80">
-          Após a autenticação você será redirecionado para <code
-            >{cognitoConfig.redirectUri || "/auth/callback"}</code
-          >, onde o código de autorização será exibido para troca por tokens no
-          backend.
+        <p class="mt-8 text-center text-xs text-[var(--color-text-muted)]">
+          Efetuando o login você estará concordando com os Termos de Uso do
+          serviço. Após a autenticação você será redirecionado para o painel do
+          seu perfil
         </p>
       </div>
     </section>
