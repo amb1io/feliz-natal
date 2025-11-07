@@ -86,6 +86,7 @@ Resources:
         email: email
         name: name
         username: sub
+        picture: picture
 
   # App Client
   UserPoolClient:
