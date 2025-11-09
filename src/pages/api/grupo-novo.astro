@@ -1,0 +1,461 @@
+---
+import FormSuccess from '../../components/FormSuccess.astro';
+import { sendInviteEmail } from '../../utils/email';
+
+export const prerender = false;
+
+const env = Astro.locals.cloudflare?.env ?? Astro.locals.runtime?.env ?? Astro.locals?.env;
+const session = Astro.cookies.get('felizNatalSession')?.value ?? null;
+
+let redirectLocation: string | null = null;
+let successProps:
+  | {
+      message: string;
+      description?: string | null;
+    }
+  | null = null;
+let errorMessage: string | null = null;
+let statusCode = 200;
+
+if (!env?.DB || !session) {
+  return Astro.redirect('/app/');
+}
+
+const formData = await Astro.request.formData();
+
+const grupoIdParamRaw = formData.get('grupo_id');
+const grupoIdParam =
+  typeof grupoIdParamRaw === 'string'
+    ? grupoIdParamRaw.trim() || null
+    : grupoIdParamRaw
+      ? grupoIdParamRaw.toString().trim() || null
+      : null;
+const isEditing = Boolean(grupoIdParam);
+
+const titulo = formData.get('titulo')?.toString().trim();
+const descricao = formData.get('descricao')?.toString().trim() || null;
+const dataSorteio = formData.get('data_sorteio')?.toString();
+const dataRevelacao = formData.get('data_revelacao')?.toString();
+const status = 'ativo';
+
+const tipoPresente = formData.get('tipo_presente')?.toString() || null;
+
+const buildInviteLink = (token: string) =>
+  new URL(`/convite?token=${encodeURIComponent(token)}`, Astro.url).toString();
+
+const sendInviteSafely = async (email: string | null, token: string, groupTitle: string) => {
+  if (!email) return;
+  try {
+    await sendInviteEmail(env, {
+      to: email,
+      groupTitle,
+      inviteLink: buildInviteLink(token),
+      inviterName: null
+    });
+  } catch (error) {
+    console.error('Erro ao enviar email de convite:', error);
+  }
+};
+const orcamentoMinimo = formData.get('orcamento_minimo')?.toString();
+const orcamentoMaximo = formData.get('orcamento_maximo')?.toString();
+const orcamentoSemLimites = formData.get('orcamento_sem_limites') === 'true';
+const localizacao = formData.get('localizacao')?.toString() || null;
+const localizacaoNomeRaw = formData.get('localizacao_nome');
+const localizacaoNome =
+  typeof localizacaoNomeRaw === 'string'
+    ? localizacaoNomeRaw.trim() || null
+    : localizacaoNomeRaw
+      ? localizacaoNomeRaw.toString().trim() || null
+      : null;
+const localizacaoLatRaw = formData.get('localizacao_lat')?.toString();
+const localizacaoLngRaw = formData.get('localizacao_lng')?.toString();
+const tags = (formData.getAll('tags') ?? []).map((tag) => tag.toString()).filter(Boolean);
+
+const parseCoordinate = (value: string | null | undefined) => {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const localizacaoLat = parseCoordinate(localizacaoLatRaw);
+const localizacaoLng = parseCoordinate(localizacaoLngRaw);
+
+const participantesRaw = formData.getAll('participantes') ?? [];
+const participantes = participantesRaw
+  .map((entry) => {
+    try {
+      return JSON.parse(entry.toString());
+    } catch (error) {
+      console.error('Erro ao interpretar participante:', entry, error);
+      return null;
+    }
+  })
+  .filter(Boolean) as Array<{ email?: string | null; telefone?: string | null }>;
+
+const slugify = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+
+if (!titulo || !dataSorteio) {
+  statusCode = 400;
+  errorMessage = 'Título e data do sorteio são obrigatórios.';
+} else {
+  const db = env.DB;
+
+  try {
+    const agora = new Date().toISOString();
+
+    if (isEditing) {
+      const grupoRegistro = await db
+        .prepare('SELECT id, slug, criado_por FROM grupo WHERE id = ? LIMIT 1')
+        .bind(grupoIdParam)
+        .first();
+
+      if (!grupoRegistro || (grupoRegistro as { criado_por: string }).criado_por !== session) {
+        statusCode = 404;
+        errorMessage = 'Grupo não encontrado.';
+      } else {
+        const grupoId = (grupoRegistro as { id: string }).id;
+        const slugExistente = (grupoRegistro as { slug: string }).slug;
+
+        await db
+          .prepare(
+            `UPDATE grupo
+             SET titulo = ?, descricao = ?, data_sorteio = ?, data_revelacao = ?, status = ?
+             WHERE id = ?`
+          )
+          .bind(
+            titulo,
+            descricao,
+            dataSorteio ? new Date(dataSorteio).toISOString() : null,
+            dataRevelacao ? new Date(dataRevelacao).toISOString() : null,
+            status,
+            grupoId
+          )
+          .run();
+
+        const metadataExiste = await db
+          .prepare('SELECT 1 FROM grupo_metadata WHERE grupo_id = ? LIMIT 1')
+          .bind(grupoId)
+          .first();
+
+        if (metadataExiste) {
+          await db
+            .prepare(
+              `UPDATE grupo_metadata
+               SET tipo_presente = ?, orcamento_minimo = ?, orcamento_maximo = ?, orcamento_sem_limites = ?, localizacao = ?, localizacao_nome = ?, localizacao_lat = ?, localizacao_lng = ?
+               WHERE grupo_id = ?`
+            )
+            .bind(
+              tipoPresente,
+              orcamentoMinimo ? Number(orcamentoMinimo) : null,
+              orcamentoMaximo ? Number(orcamentoMaximo) : null,
+              orcamentoSemLimites,
+              localizacao,
+              localizacaoNome,
+              localizacaoLat,
+              localizacaoLng,
+              grupoId
+            )
+            .run();
+        } else {
+          await db
+            .prepare(
+              `INSERT INTO grupo_metadata (grupo_id, tipo_presente, orcamento_minimo, orcamento_maximo, orcamento_sem_limites, localizacao, localizacao_nome, localizacao_lat, localizacao_lng)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            )
+            .bind(
+              grupoId,
+              tipoPresente,
+              orcamentoMinimo ? Number(orcamentoMinimo) : null,
+              orcamentoMaximo ? Number(orcamentoMaximo) : null,
+              orcamentoSemLimites,
+              localizacao,
+              localizacaoNome,
+              localizacaoLat,
+              localizacaoLng
+            )
+            .run();
+        }
+
+        await db.prepare('DELETE FROM grupo_tag WHERE grupo_id = ?').bind(grupoId).run();
+
+        if (tags.length) {
+          const insertTag = db.prepare(`INSERT INTO grupo_tag (grupo_id, tag) VALUES (?, ?)`);
+          for (const tag of tags) {
+            await insertTag.bind(grupoId, tag).run();
+          }
+        }
+
+        const existingParticipantsResult = await db
+          .prepare(
+            `SELECT gp.usuario_id, u.email
+             FROM grupo_participante gp
+             LEFT JOIN usuario u ON u.id = gp.usuario_id
+             WHERE gp.grupo_id = ?`
+          )
+          .bind(grupoId)
+          .all();
+
+        const existingParticipantIds = new Set<string>();
+        const existingParticipantEmails = new Map<string, string>();
+
+        for (const row of existingParticipantsResult?.results ?? []) {
+          const record = row as { usuario_id: string; email?: string | null };
+          existingParticipantIds.add(record.usuario_id);
+          if (record.email) {
+            existingParticipantEmails.set(record.email.toLowerCase(), record.usuario_id);
+          }
+        }
+
+        const existingConvitesResult = await db
+          .prepare('SELECT email, telefone FROM convite WHERE grupo_id = ?')
+          .bind(grupoId)
+          .all();
+
+        const conviteKeys = new Set<string>();
+        for (const row of existingConvitesResult?.results ?? []) {
+          const record = row as { email?: string | null; telefone?: string | null };
+          const key = `${record.email?.toLowerCase() ?? ''}|${record.telefone ?? ''}`;
+          conviteKeys.add(key);
+        }
+
+        const insertParticipante = db.prepare(
+          `INSERT INTO grupo_participante (grupo_id, usuario_id, perfil, is_confirmado, is_revelado, is_ativo, criado_em, aderido_em)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+        );
+
+        const insertConvite = db.prepare(
+          `INSERT INTO convite (id, grupo_id, email, telefone, token, status, enviado_em)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        );
+
+        for (const participante of participantes) {
+          const email = (participante.email ?? '').toString().trim() || null;
+          const telefone = (participante.telefone ?? '').toString().trim() || null;
+          const emailLower = email ? email.toLowerCase() : null;
+
+          if (email) {
+            let usuarioId: string | null = null;
+
+            if (emailLower && existingParticipantEmails.has(emailLower)) {
+              usuarioId = existingParticipantEmails.get(emailLower) ?? null;
+            } else {
+              const usuarioExistente = await db
+                .prepare('SELECT id FROM usuario WHERE email = ?')
+                .bind(email)
+                .first();
+
+              if (usuarioExistente?.id) {
+                usuarioId = usuarioExistente.id as string;
+              }
+            }
+
+            if (usuarioId && !existingParticipantIds.has(usuarioId)) {
+              await insertParticipante
+                .bind(grupoId, usuarioId, null, false, false, true, agora, null)
+                .run();
+              existingParticipantIds.add(usuarioId);
+              if (emailLower) {
+                existingParticipantEmails.set(emailLower, usuarioId);
+              }
+            }
+          }
+
+          if (email || telefone) {
+            const key = `${email?.toLowerCase() ?? ''}|${telefone ?? ''}`;
+            if (!conviteKeys.has(key)) {
+              const inviteId = crypto.randomUUID();
+              const inviteToken = crypto.randomUUID();
+              await insertConvite
+                .bind(
+                  inviteId,
+                  grupoId,
+                  email,
+                  telefone,
+                  inviteToken,
+                  'pendente',
+                  agora
+                )
+                .run();
+              conviteKeys.add(key);
+              if (email) {
+                await sendInviteSafely(email, inviteToken, titulo);
+              }
+            }
+          }
+        }
+
+        successProps = {
+          message: 'Grupo atualizado com sucesso!',
+          description: 'Redirecionando para a página do grupo...'
+        };
+        redirectLocation = `/app/grupo/${slugExistente}`;
+      }
+    } else {
+      const grupoId = crypto.randomUUID();
+
+      const baseSlug = slugify(titulo);
+      const fallbackSlugFragment = crypto.randomUUID().split('-')[0];
+      const initialSlug = baseSlug || fallbackSlugFragment;
+
+      const resolveUniqueSlug = async (candidate: string) => {
+        let attempt = 1;
+        let currentSlug = candidate;
+
+        while (true) {
+          const existing = await db
+            .prepare('SELECT 1 FROM grupo WHERE slug = ? LIMIT 1')
+            .bind(currentSlug)
+            .first();
+
+          if (!existing) {
+            return currentSlug;
+          }
+
+          currentSlug = `${candidate}-${attempt}`;
+          attempt += 1;
+        }
+      };
+
+      const slug = await resolveUniqueSlug(initialSlug);
+
+      const usuarioExistente = await db
+        .prepare('SELECT id FROM usuario WHERE id = ?')
+        .bind(session)
+        .first();
+
+      if (!usuarioExistente) {
+        const placeholderEmail = `${session}@placeholder.local`;
+        await db
+          .prepare(
+            `INSERT INTO usuario (id, nome, email, criado_em)
+             VALUES (?, ?, ?, ?)`
+          )
+          .bind(session, 'Organizador', placeholderEmail, agora)
+          .run();
+      }
+
+      await db
+        .prepare(
+          `INSERT INTO grupo (id, slug, criado_por, titulo, descricao, data_sorteio, data_revelacao, status, criado_em)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .bind(
+          grupoId,
+          slug,
+          session,
+          titulo,
+          descricao,
+          dataSorteio ? new Date(dataSorteio).toISOString() : null,
+          dataRevelacao ? new Date(dataRevelacao).toISOString() : null,
+          status,
+          agora
+        )
+        .run();
+
+      await db
+        .prepare(
+          `INSERT INTO grupo_metadata (grupo_id, tipo_presente, orcamento_minimo, orcamento_maximo, orcamento_sem_limites, localizacao, localizacao_nome, localizacao_lat, localizacao_lng)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .bind(
+          grupoId,
+          tipoPresente,
+          orcamentoMinimo ? Number(orcamentoMinimo) : null,
+          orcamentoMaximo ? Number(orcamentoMaximo) : null,
+          orcamentoSemLimites,
+          localizacao,
+          localizacaoNome,
+          localizacaoLat,
+          localizacaoLng
+        )
+        .run();
+
+      const insertParticipante = db.prepare(
+        `INSERT INTO grupo_participante (grupo_id, usuario_id, perfil, is_confirmado, is_revelado, is_ativo, criado_em, aderido_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+
+      const participanteIdsInseridos = new Set<string>([session]);
+
+      await insertParticipante
+        .bind(grupoId, session, 'organizador', true, false, true, agora, agora)
+        .run();
+
+      const insertConvite = db.prepare(
+        `INSERT INTO convite (id, grupo_id, email, telefone, token, status, enviado_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      );
+
+      for (const participante of participantes) {
+        const email = (participante.email ?? '').toString().trim() || null;
+        const telefone = (participante.telefone ?? '').toString().trim() || null;
+
+        if (email) {
+          const usuarioExistente = await db
+            .prepare('SELECT id FROM usuario WHERE email = ?')
+            .bind(email)
+            .first();
+
+          const usuarioId = usuarioExistente?.id as string | undefined;
+
+          if (usuarioId && !participanteIdsInseridos.has(usuarioId)) {
+            await insertParticipante
+              .bind(grupoId, usuarioId, null, false, false, true, agora, null)
+              .run();
+            participanteIdsInseridos.add(usuarioId);
+          }
+        }
+
+        if (email || telefone) {
+          const inviteId = crypto.randomUUID();
+          const inviteToken = crypto.randomUUID();
+          await insertConvite
+            .bind(inviteId, grupoId, email, telefone, inviteToken, 'pendente', agora)
+            .run();
+          if (email) {
+            await sendInviteSafely(email, inviteToken, titulo);
+          }
+        }
+      }
+
+      if (tags.length) {
+        const insertTag = db.prepare(`INSERT INTO grupo_tag (grupo_id, tag) VALUES (?, ?)`);
+        for (const tag of tags) {
+          await insertTag.bind(grupoId, tag).run();
+        }
+      }
+
+      successProps = {
+        message: 'Grupo criado com sucesso!',
+        description: 'Redirecionando para a página do grupo...'
+      };
+      redirectLocation = `/app/grupo/${slug}`;
+    }
+  } catch (error) {
+    console.error('Erro ao criar grupo:', error);
+    statusCode = 500;
+    errorMessage = 'Não foi possível criar o grupo. Tente novamente.';
+  }
+}
+
+Astro.response.status = statusCode;
+
+if (redirectLocation) {
+  Astro.response.headers.set('HX-Redirect', redirectLocation);
+}
+---
+{successProps ? (
+  <FormSuccess message={successProps.message} description={successProps.description} />
+) : (
+  <div class="text-sm text-red-500">
+    {errorMessage ?? 'Não foi possível criar o grupo. Tente novamente.'}
+  </div>
+)}

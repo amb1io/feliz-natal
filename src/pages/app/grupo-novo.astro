@@ -1,0 +1,944 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import AppHeader from "../../components/AppHeader.astro";
+import Footer from "../../components/Footer.astro";
+import { sendInviteEmail } from "../../utils/email";
+
+export const prerender = false;
+
+const sessionCookie = Astro.cookies.get("felizNatalSession");
+if (!sessionCookie) {
+  return Astro.redirect("/app/");
+}
+
+const sessionId = sessionCookie.value ?? null;
+
+const env =
+  Astro.locals.cloudflare?.env ??
+  Astro.locals.runtime?.env ??
+  Astro.locals?.env ??
+  null;
+
+const url = new URL(Astro.request.url);
+const editingSlug = url.searchParams.get("grupo")?.trim() ?? null;
+
+const formatDateForInput = (value?: string | null) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    // fallback: try raw slice if ISO-like
+    if (typeof value === "string" && value.length >= 10) {
+      return value.slice(0, 10);
+    }
+    return "";
+  }
+  return date.toISOString().slice(0, 10);
+};
+
+const toNumberOrNull = (value: unknown) => {
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+type ParticipantDraft = { email: string | null; phone: string | null };
+
+let groupInitialData: {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  drawDate: string;
+  revealDate: string;
+  giftType: string;
+  priceMin: number;
+  priceMax: number;
+  noLimit: boolean;
+  location: string;
+  locationName: string | null;
+  locationLat: number | null;
+  locationLng: number | null;
+  tags: string[];
+  participants: ParticipantDraft[];
+} | null = null;
+
+if (editingSlug && env?.DB && sessionId) {
+  const groupRow = await env.DB.prepare(
+    `SELECT
+        g.id,
+        g.slug,
+        g.titulo,
+        g.descricao,
+        g.data_sorteio,
+        g.data_revelacao,
+        g.status,
+        gm.tipo_presente,
+        gm.orcamento_minimo,
+        gm.orcamento_maximo,
+        gm.orcamento_sem_limites,
+        gm.localizacao,
+        gm.localizacao_nome,
+        gm.localizacao_lat,
+        gm.localizacao_lng
+     FROM grupo g
+     LEFT JOIN grupo_metadata gm ON gm.grupo_id = g.id
+     WHERE g.slug = ?
+       AND g.criado_por = ?
+     LIMIT 1`
+  )
+    .bind(editingSlug, sessionId)
+    .first();
+
+  if (groupRow) {
+    const groupId = (groupRow as { id: string }).id;
+
+    const tagsResult = await env.DB.prepare(
+      `SELECT tag FROM grupo_tag WHERE grupo_id = ? ORDER BY tag ASC`
+    )
+      .bind(groupId)
+      .all();
+
+    const tags =
+      tagsResult?.results?.map((row) => (row as { tag: string }).tag) ?? [];
+
+    const convitesResult = await env.DB.prepare(
+      `SELECT email, telefone FROM convite WHERE grupo_id = ? ORDER BY criado_em ASC`
+    )
+      .bind(groupId)
+      .all();
+
+    const membrosResult = await env.DB.prepare(
+      `SELECT u.email
+       FROM grupo_participante gp
+       JOIN usuario u ON u.id = gp.usuario_id
+       WHERE gp.grupo_id = ?
+         AND gp.usuario_id != ?`
+    )
+      .bind(groupId, sessionId)
+      .all();
+
+    const participantMap = new Map<string, ParticipantDraft>();
+
+    const appendParticipant = (email?: string | null, phone?: string | null) => {
+      const sanitizedEmail = email?.toString().trim() || null;
+      const sanitizedPhone = phone?.toString().trim() || null;
+      if (!sanitizedEmail && !sanitizedPhone) return;
+      const key = `${sanitizedEmail?.toLowerCase() ?? ""}|${
+        sanitizedPhone ?? ""
+      }`;
+      if (!participantMap.has(key)) {
+        participantMap.set(key, {
+          email: sanitizedEmail,
+          phone: sanitizedPhone,
+        });
+      }
+    };
+
+    for (const row of convitesResult?.results ?? []) {
+      const record = row as { email?: string | null; telefone?: string | null };
+      appendParticipant(record.email ?? null, record.telefone ?? null);
+    }
+
+    for (const row of membrosResult?.results ?? []) {
+      const record = row as { email?: string | null };
+      appendParticipant(record.email ?? null, null);
+    }
+
+    const priceMinRaw = toNumberOrNull(
+      (groupRow as { orcamento_minimo?: number | null }).orcamento_minimo ?? null
+    );
+    const priceMaxRaw = toNumberOrNull(
+      (groupRow as { orcamento_maximo?: number | null }).orcamento_maximo ?? null
+    );
+
+    groupInitialData = {
+      id: groupId,
+      slug: (groupRow as { slug: string }).slug,
+      name: (groupRow as { titulo: string }).titulo,
+      description:
+        (groupRow as { descricao?: string | null }).descricao ?? "",
+      drawDate: formatDateForInput(
+        (groupRow as { data_sorteio?: string | null }).data_sorteio ?? null
+      ),
+      revealDate: formatDateForInput(
+        (groupRow as { data_revelacao?: string | null }).data_revelacao ?? null
+      ),
+      giftType: (groupRow as { tipo_presente?: string | null }).tipo_presente ?? "",
+      priceMin: priceMinRaw ?? 50,
+      priceMax: priceMaxRaw ?? 200,
+      noLimit: Boolean(
+        (groupRow as { orcamento_sem_limites?: boolean | number | null })
+          .orcamento_sem_limites ?? false
+      ),
+      location:
+        (groupRow as { localizacao?: string | null }).localizacao ?? "",
+      locationName:
+        (groupRow as { localizacao_nome?: string | null }).localizacao_nome ??
+        null,
+      locationLat: toNumberOrNull(
+        (groupRow as { localizacao_lat?: number | null }).localizacao_lat ?? null
+      ),
+      locationLng: toNumberOrNull(
+        (groupRow as { localizacao_lng?: number | null }).localizacao_lng ?? null
+      ),
+      tags,
+      participants: Array.from(participantMap.values()),
+    };
+  }
+}
+
+if (editingSlug && !groupInitialData) {
+  return Astro.redirect("/app/grupos");
+}
+
+const isEditing = Boolean(groupInitialData);
+
+const googleMapsKey = import.meta.env.PUBLIC_GOOGLE_MAPS_KEY ?? "";
+---
+
+<Layout>
+  <div class="min-h-screen bg-transparent">
+    <AppHeader />
+
+    <main class="mx-auto max-w-4xl space-y-10 px-6 py-12" x-data="groupForm()">
+      <header class="space-y-3 text-center">
+        <h1 class="text-3xl font-semibold text-[var(--color-text)]">
+          {isEditing ? "Editar grupo" : "Cadastrar novo grupo"}
+        </h1>
+        <p class="text-sm text-[var(--color-text-muted)]">
+          {isEditing
+            ? "Atualize os detalhes do seu amigo secreto e gerencie os convites."
+            : "Preencha as informações abaixo para iniciar um novo amigo secreto."}
+        </p>
+      </header>
+
+      <div id="form-feedback" class="text-sm"></div>
+
+      <form
+        class="space-y-0"
+        x-ref="form"
+        hx-post="/api/grupo-novo"
+        hx-target="#form-feedback"
+        hx-swap="innerHTML"
+      hx-on::before-request="document.getElementById('form-feedback').innerHTML = 'Salvando registro...';"
+      >
+        <input type="hidden" name="grupo_id" value={groupInitialData?.id ?? ""} />
+        <section
+          class="space-y-4 bg-[var(--color-surface)] px-6 py-6 shadow-[0_12px_24px_rgba(109,76,65,0.1)]"
+        >
+          <label class="flex flex-col gap-2 text-left">
+            <span
+              class="text-sm font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+              >Nome do grupo</span
+            >
+            <input
+              type="text"
+              name="titulo"
+              required
+              x-model="form.name"
+              class="rounded-2xl border border-[var(--color-border)] bg-[rgba(255,209,102,0.25)] px-4 py-3 text-base text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              placeholder="Ex.: Confraternização da empresa"
+            />
+          </label>
+        </section>
+
+        <section
+          class="space-y-4 bg-[var(--color-surface)] px-6 py-6 shadow-[0_12px_24px_rgba(109,76,65,0.1)]"
+        >
+          <h2
+            class="text-sm font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+          >
+            Tipo dos presentes
+          </h2>
+          <div class="grid gap-3 sm:grid-cols-3">
+            <label
+              class="flex items-center gap-2 rounded-2xl border border-[rgba(148,163,184,0.2)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text)]"
+            >
+              <input
+                type="radio"
+                name="tipo_presente"
+                value="ladrao"
+                x-model="form.giftType"
+                class="h-4 w-4"
+                required
+              />
+              <span>Amigo Ladrão</span>
+            </label>
+            <label
+              class="flex items-center gap-2 rounded-2xl border border-[rgba(148,163,184,0.2)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text)]"
+            >
+              <input
+                type="radio"
+                name="tipo_presente"
+                value="onca"
+                x-model="form.giftType"
+                class="h-4 w-4"
+              />
+              <span>Amigo da Onça</span>
+            </label>
+            <label
+              class="flex items-center gap-2 rounded-2xl border border-[rgba(148,163,184,0.2)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text)]"
+            >
+              <input
+                type="radio"
+                name="tipo_presente"
+                value="tradicional"
+                x-model="form.giftType"
+                class="h-4 w-4"
+              />
+              <span>Amigo Tradicional</span>
+            </label>
+          </div>
+        </section>
+
+        <section
+          class="space-y-4 bg-[var(--color-surface)] px-6 py-6 shadow-[0_12px_24px_rgba(109,76,65,0.1)]"
+        >
+          <label class="flex flex-col gap-2">
+            <span
+              class="text-sm font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+              >Data do sorteio</span
+            >
+            <input
+              type="date"
+              name="data_sorteio"
+              required
+              x-model="form.drawDate"
+              class="rounded-2xl border border-[var(--color-border)] bg-[rgba(255,209,102,0.25)] px-4 py-3 text-base text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+            />
+          </label>
+        </section>
+
+        <section
+          class="space-y-4 bg-[var(--color-surface)] px-6 py-6 shadow-[0_12px_24px_rgba(109,76,65,0.1)]"
+        >
+          <label class="flex flex-col gap-2">
+            <span
+              class="text-sm font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+              >Data da revelação</span
+            >
+            <input
+              type="date"
+              name="data_revelacao"
+              x-model="form.revealDate"
+              value={groupInitialData?.revealDate ?? ""}
+              class="rounded-2xl border border-[var(--color-border)] bg-[rgba(255,209,102,0.25)] px-4 py-3 text-base text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+            />
+          </label>
+        </section>
+
+        <section
+          class="space-y-3 bg-[var(--color-surface)] px-6 py-6 shadow-[0_12px_24px_rgba(109,76,65,0.1)]"
+        >
+          <div
+            class="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+          >
+            <span>Valor do presente</span>
+            <span x-text="priceLabel"></span>
+          </div>
+          <div class="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+            <div
+              class="range-slider"
+              x-ref="sliderWrapper"
+              x-effect="updateSliderTrack()"
+            >
+              <div class="slider-track" x-ref="sliderTrack"></div>
+              <input
+                type="range"
+                min="0"
+                :max="rangeMaxValue"
+                step="10"
+                x-model.number="form.priceMin"
+                @input="syncMin(); updateSliderTrack()"
+                class="range-input range-min"
+              />
+              <input
+                type="range"
+                min="0"
+                :max="rangeMaxValue"
+                step="10"
+                x-model.number="form.priceMax"
+                @input="syncMax(); updateSliderTrack()"
+                class="range-input range-max"
+                :disabled="form.noLimit"
+              />
+            </div>
+            <label
+              class="flex items-center gap-2 text-xs text-[var(--color-text-muted)]"
+            >
+              <input
+                type="checkbox"
+                x-model="form.noLimit"
+                @change="toggleNoLimit"
+                class="h-4 w-4"
+              />
+              <span>Sem limites</span>
+            </label>
+            <input
+              type="hidden"
+              name="orcamento_minimo"
+              :value="form.priceMin"
+            />
+            <input
+              type="hidden"
+              name="orcamento_maximo"
+              :value="form.noLimit ? '' : form.priceMax"
+            />
+            <input
+              type="hidden"
+              name="orcamento_sem_limites"
+              :value="form.noLimit"
+            />
+          </div>
+        </section>
+
+        <section
+          class="space-y-4 bg-[var(--color-surface)] px-6 py-6 shadow-[0_12px_24px_rgba(109,76,65,0.1)]"
+        >
+          <label class="flex flex-col gap-2">
+            <span
+              class="text-sm font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+              >Local da revelação</span
+            >
+            <input
+              type="text"
+              required
+              x-ref="location"
+              x-model="form.location"
+              name="localizacao"
+              class="rounded-2xl border border-[var(--color-border)] bg-[rgba(255,209,102,0.25)] px-4 py-3 text-base text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              placeholder="Busque um endereço"
+            />
+            <input type="hidden" name="localizacao_lat" :value="form.locationLat ?? ''" />
+            <input type="hidden" name="localizacao_lng" :value="form.locationLng ?? ''" />
+            <input type="hidden" name="localizacao_nome" :value="form.locationName ?? ''" />
+            {
+              googleMapsKey ? (
+                <p class="text-xs text-[var(--color-text-muted)]">
+                  As sugestões são fornecidas pelo Google Places Autocomplete.
+                  Selecione um endereço da lista.
+                </p>
+              ) : (
+                <p class="text-xs text-[var(--color-text-muted)]">
+                  Para ativar as sugestões, defina a variável{" "}
+                  <code>PUBLIC_GOOGLE_MAPS_KEY</code> no arquivo{" "}
+                  <code>.env</code>.
+                </p>
+              )
+            }
+          </label>
+        </section>
+
+        <section
+          class="space-y-4 bg-[var(--color-surface)] px-6 py-6 shadow-[0_12px_24px_rgba(109,76,65,0.1)]"
+        >
+          <label class="flex flex-col gap-2">
+            <span
+              class="text-sm font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+              >Tags</span
+            >
+            <div
+              class="flex flex-wrap items-center gap-2 rounded-2xl border border-[var(--color-border)] bg-[rgba(255,209,102,0.25)] px-4 py-3"
+            >
+              <template x-for="tag in form.tags" :key="tag">
+                <input type="hidden" name="tags" :value="tag" />
+              </template>
+              <template x-for="tag in form.tags" :key="tag">
+                <span
+                  class="inline-flex items-center gap-2 rounded-full bg-[rgba(230,57,70,0.18)] px-3 py-1 text-xs font-semibold text-[var(--color-primary)]"
+                >
+                  <span x-text="tag"></span>
+                  <button
+                    type="button"
+                    class="text-[rgba(230,57,70,0.8)]"
+                    @click="removeTag(tag)">×</button
+                  >
+                </span>
+              </template>
+              <input
+                type="text"
+                class="flex-1 bg-transparent text-sm text-[var(--color-text)] focus:outline-none"
+                placeholder="Digite e use vírgula para adicionar"
+                @keydown.enter.prevent="captureTag"
+                @keydown.",".prevent="captureTag"
+                @blur="captureTag"
+                x-model="tagDraft"
+              />
+            </div>
+          </label>
+        </section>
+
+        <section class="space-y-4 bg-[var(--color-surface)] px-6 py-6">
+          <label class="flex flex-col gap-2">
+            <span
+              class="text-sm font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+              >Descrição</span
+            >
+            <textarea
+              required
+              name="descricao"
+              x-model="form.description"
+              rows="4"
+              class="rounded-2xl border border-[var(--color-border)] bg-[rgba(255,209,102,0.25)] px-4 py-3 text-base text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              placeholder="Conte os detalhes do grupo..."></textarea>
+          </label>
+        </section>
+
+        <section
+          class="space-y-4 bg-[var(--color-surface)] px-6 py-6 shadow-[0_12px_24px_rgba(109,76,65,0.1)]"
+        >
+          <div class="flex items-center justify-between">
+            <span
+              class="text-sm font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+              >Adicionar Participantes</span
+            >
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 rounded-full border border-[var(--color-primary)] px-4 py-2 text-xs font-semibold uppercase text-[var(--color-primary)] hover:bg-[rgba(230,57,70,0.15)]"
+              @click="addParticipant"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                class="h-4 w-4"
+              >
+                <path
+                  fill-rule="evenodd"
+                  d="M10 4.5a.75.75 0 0 1 .75.75v4h4a.75.75 0 0 1 0 1.5h-4v4a.75.75 0 0 1-1.5 0v-4h-4a.75.75 0 0 1 0-1.5h4v-4A.75.75 0 0 1 10 4.5Z"
+                  clip-rule="evenodd"></path>
+              </svg>
+              Novo
+            </button>
+          </div>
+          <div class="space-y-6">
+            <template
+              x-for="(participant, index) in form.participants"
+              :key="index"
+            >
+              <div
+                class="space-y-3 rounded-2xl border border-[var(--color-border)] bg-[rgba(255,209,102,0.2)] px-4 py-4"
+              >
+                <div class="flex items-center justify-between">
+                  <p
+                    class="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+                  >
+                    Participante <span x-text="index + 1"></span>
+                  </p>
+                  <button
+                    type="button"
+                    class="text-xs font-semibold uppercase tracking-[0.2em] text-[rgba(148,163,184,0.8)] hover:text-[var(--color-primary)]"
+                    @click="removeParticipant(index)"
+                    x-show="form.participants.length > 1"
+                  >
+                    Remover
+                  </button>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <label class="space-y-2">
+                    <span
+                      class="text-xs font-medium uppercase tracking-[0.2em] text-[var(--color-text-muted)]"
+                      >Email</span
+                    >
+                    <div class="relative">
+                      <span
+                        class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[rgba(148,163,184,0.8)]"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          class="h-5 w-5"
+                        >
+                          <path
+                            d="M2.5 5.5A2.5 2.5 0 0 1 5 3h10a2.5 2.5 0 0 1 2.5 2.5v9a.5.5 0 0 1-.81.39l-4.7-3.76-1.77 1.42a.5.5 0 0 1-.62 0L7.83 11.1l-4.52 3.79a.5.5 0 0 1-.81-.39v-9Z"
+                          ></path>
+                          <path
+                            d="m4.07 5.07 5.18 4.33a.5.5 0 0 0 .64 0l5.04-4.2a.5.5 0 0 0-.35-.2H5a1 1 0 0 0-.93.57Z"
+                          ></path>
+                        </svg>
+                      </span>
+                      <input
+                        type="email"
+                        :required="!participant.phone"
+                        x-model="participant.email"
+                        class="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 pl-12 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                        placeholder="email@exemplo.com"
+                      />
+                    </div>
+                  </label>
+                  <label class="space-y-2">
+                    <span
+                      class="text-xs font-medium uppercase tracking-[0.2em] text-[var(--color-text-muted)]"
+                      >Telefone</span
+                    >
+                    <div class="relative">
+                      <span
+                        class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[rgba(148,163,184,0.8)]"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                          class="h-5 w-5"
+                        >
+                          <path
+                            fill-rule="evenodd"
+                            d="M6.49 2a1.5 1.5 0 0 0-1.42 1.04l-.75 2.5a1.5 1.5 0 0 0 .34 1.45l2.05 2.24a.75.75 0 0 1 .17.47c0 .18-.03.36-.08.53A9.17 9.17 0 0 0 9.77 14.7a9.17 9.17 0 0 0 4.47 2.07 1.5 1.5 0 0 0 1.44-.43l1.8-1.93a1.5 1.5 0 0 0 .3-1.59l-.86-2.06a1.5 1.5 0 0 0-1.35-.9h-2.51a.75.75 0 0 1-.53-.22l-1.9-1.9a.75.75 0 0 1-.22-.53V3.5A1.5 1.5 0 0 0 9.5 2h-3Zm1.01 1.5H9v3.44l2.18 2.18h2.51l.86 2.06-1.8 1.93a7.67 7.67 0 0 1-3.73-1.73 7.67 7.67 0 0 1-2.41-3.02l.28-.94-2.05-2.24.75-2.5Z"
+                            clip-rule="evenodd"></path>
+                        </svg>
+                      </span>
+                      <input
+                        type="tel"
+                        :required="!participant.email"
+                        x-model="participant.phone"
+                        inputmode="numeric"
+                        maxlength="14"
+                        @input="onPhoneInput($event, participant)"
+                        class="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 pl-12 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+                        placeholder="(00) 00000-0000"
+                      />
+                    </div>
+                  </label>
+                </div>
+                <input
+                  type="hidden"
+                  name="participantes"
+                  :value="JSON.stringify({ email: participant.email || null, telefone: participant.phone || null })"
+                />
+              </div>
+            </template>
+          </div>
+        </section>
+
+        <div class="mt-10 flex justify-center">
+          <button
+            type="submit"
+            class="scroll-fade inline-flex w-full max-w-sm items-center justify-center gap-3 rounded-full bg-[var(--color-primary)] px-6 py-4 text-base font-semibold uppercase text-[var(--color-primary-foreground)] shadow-[0_10px_24px_rgba(230,57,70,0.2)] transition hover:shadow-[0_14px_30px_rgba(230,57,70,0.28)]"
+          >
+            {isEditing ? "ATUALIZAR GRUPO" : "SALVAR GRUPO"}
+          </button>
+        </div>
+      </form>
+    </main>
+
+    <Footer />
+
+    <style is:inline>
+      .range-slider {
+        position: relative;
+        height: 1.5rem;
+        width: 100%;
+      }
+      .range-slider .slider-track {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        right: 0;
+        height: 0.5rem;
+        transform: translateY(-50%);
+        border-radius: 9999px;
+        background: rgba(109, 76, 65, 0.18);
+      }
+      .range-slider input[type="range"] {
+        position: absolute;
+        left: 0;
+        width: 100%;
+        height: 1.5rem;
+        -webkit-appearance: none;
+        appearance: none;
+        background: none;
+      }
+      .range-slider .range-input.range-min {
+        z-index: 2;
+      }
+      .range-slider .range-input.range-max {
+        z-index: 1;
+      }
+      .range-slider input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        pointer-events: auto;
+        height: 1.1rem;
+        width: 1.1rem;
+        border-radius: 9999px;
+        background: var(--color-primary);
+        border: 2px solid var(--color-background);
+        box-shadow: 0 0 0 4px rgba(230, 57, 70, 0.15);
+        cursor: pointer;
+        transition: transform 120ms ease;
+      }
+      .range-slider input[type="range"]::-moz-range-thumb {
+        height: 1.1rem;
+        width: 1.1rem;
+        border-radius: 9999px;
+        background: var(--color-primary);
+        border: 2px solid var(--color-background);
+        box-shadow: 0 0 0 4px rgba(230, 57, 70, 0.15);
+        cursor: pointer;
+        transition: transform 120ms ease;
+      }
+      .range-slider input[type="range"]:active::-webkit-slider-thumb,
+      .range-slider input[type="range"]:active::-moz-range-thumb {
+        transform: scale(1.08);
+      }
+      .range-slider input[type="range"]::-webkit-slider-runnable-track {
+        height: 0;
+      }
+      .range-slider input[type="range"]::-moz-range-track {
+        height: 0;
+      }
+    </style>
+
+    <script is:inline define:vars={{ googleMapsKey, groupInitialData }}>
+      const GOOGLE_MAPS_KEY = googleMapsKey;
+      const INITIAL_DATA = groupInitialData ?? null;
+
+      const buildParticipants = (entries) => {
+        if (!Array.isArray(entries) || !entries.length) {
+          return [{ email: "", phone: "" }];
+        }
+        return entries.map((entry) => ({
+          email: entry?.email ?? "",
+          phone: entry?.phone ?? "",
+        }));
+      };
+
+      window.groupForm = () => ({
+        form: {
+          name: INITIAL_DATA?.name ?? "",
+          giftType: INITIAL_DATA?.giftType ?? "",
+          drawDate: INITIAL_DATA?.drawDate ?? "",
+          revealDate: INITIAL_DATA?.revealDate ?? "",
+          priceMin: INITIAL_DATA?.priceMin ?? 50,
+          priceMax: INITIAL_DATA?.priceMax ?? 200,
+          noLimit: Boolean(INITIAL_DATA?.noLimit ?? false),
+          location: INITIAL_DATA?.location ?? "",
+          locationName: INITIAL_DATA?.locationName ?? null,
+          locationLat: INITIAL_DATA?.locationLat ?? null,
+          locationLng: INITIAL_DATA?.locationLng ?? null,
+          tags: Array.isArray(INITIAL_DATA?.tags) ? [...INITIAL_DATA.tags] : [],
+          description: INITIAL_DATA?.description ?? "",
+          participants: buildParticipants(INITIAL_DATA?.participants),
+        },
+        tagDraft: "",
+        rangeMaxValue: Math.max(
+          1000,
+          INITIAL_DATA?.priceMin ?? 0,
+          INITIAL_DATA?.priceMax ?? 0
+        ),
+        isEditing: Boolean(INITIAL_DATA?.id),
+        get priceLabel() {
+          if (this.form.noLimit) {
+            return `Mínimo R$ ${this.form.priceMin.toFixed(0)} · Sem limite máximo`;
+          }
+          return `R$ ${this.form.priceMin.toFixed(0)} – R$ ${this.form.priceMax.toFixed(0)}`;
+        },
+        syncMin() {
+          if (this.form.priceMin < 0) this.form.priceMin = 0;
+          if (this.form.priceMin > this.rangeMaxValue)
+            this.form.priceMin = this.rangeMaxValue;
+          if (this.form.priceMin > this.form.priceMax && !this.form.noLimit) {
+            this.form.priceMax = this.form.priceMin;
+          }
+          this.updateSliderTrack();
+        },
+        syncMax() {
+          if (this.form.priceMax < 0) this.form.priceMax = 0;
+          if (this.form.priceMax > this.rangeMaxValue)
+            this.form.priceMax = this.rangeMaxValue;
+          if (this.form.priceMax < this.form.priceMin) {
+            this.form.priceMin = this.form.priceMax;
+          }
+          this.updateSliderTrack();
+        },
+        toggleNoLimit() {
+          if (this.form.noLimit) {
+            this.form.priceMax = this.rangeMaxValue;
+          }
+          this.updateSliderTrack();
+        },
+        captureTag() {
+          const raw = this.tagDraft.trim();
+          if (!raw) return;
+          const newTags = raw
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter((tag) => tag.length > 0 && !this.form.tags.includes(tag));
+          this.form.tags.push(...newTags);
+          this.tagDraft = "";
+        },
+        removeTag(tag) {
+          this.form.tags = this.form.tags.filter(
+            (existing) => existing !== tag
+          );
+        },
+        addParticipant() {
+          this.form.participants.push({ email: "", phone: "" });
+        },
+        removeParticipant(index) {
+          if (this.form.participants.length === 1) return;
+          this.form.participants.splice(index, 1);
+        },
+        maskPhone(value) {
+          const digits = (value ?? "").toString().replace(/\D/g, "").slice(0, 11);
+          if (digits.length === 0) return "";
+          if (digits.length === 1) return `(${digits}`;
+          if (digits.length === 2) return `(${digits})`;
+          if (digits.length <= 6) {
+            return `(${digits.slice(0, 2)})${digits.slice(2)}`;
+          }
+          return `(${digits.slice(0, 2)})${digits.slice(2, 6)}-${digits.slice(6)}`;
+        },
+        onPhoneInput(event, participant) {
+          const masked = this.maskPhone(event.target.value);
+          event.target.value = masked;
+          participant.phone = masked;
+        },
+        updateSliderTrack() {
+          if (!this.$refs.sliderTrack) return;
+          const maxValue = this.rangeMaxValue;
+          const minPercent = (this.form.priceMin / maxValue) * 100;
+          const maxSelected = this.form.noLimit ? maxValue : this.form.priceMax;
+          const maxPercent = (maxSelected / maxValue) * 100;
+          this.$refs.sliderTrack.style.background = `linear-gradient(to right, rgba(109, 76, 65, 0.18) ${minPercent}%, var(--color-primary) ${minPercent}%, var(--color-primary) ${maxPercent}%, rgba(109, 76, 65, 0.18) ${maxPercent}%)`;
+        },
+        init() {
+          this.$nextTick(() => this.updateSliderTrack());
+
+          const locationInput = this.$refs.location;
+          if (!locationInput) return;
+
+          const syncLocationValue = (value, { name = null, lat = null, lng = null } = {}) => {
+            this.form.location = value;
+            this.form.locationName = name ?? (value || null);
+            this.form.locationLat = lat;
+            this.form.locationLng = lng;
+            locationInput.value = value ?? '';
+          };
+
+          locationInput.addEventListener("input", () => {
+            const currentValue = locationInput.value;
+            this.form.location = currentValue;
+            this.form.locationName = currentValue || null;
+
+            if (!currentValue) {
+              this.form.locationLat = null;
+              this.form.locationLng = null;
+            }
+          });
+
+          if (!GOOGLE_MAPS_KEY) {
+            console.warn(
+              "Google Maps key not configured. Places autocomplete disabled."
+            );
+            return;
+          }
+
+          window
+            .loadGoogleMapsPlaces(GOOGLE_MAPS_KEY)
+            .then(() => {
+              window.initGroupPlacesAutocomplete({
+                input: locationInput,
+                onPlaceSelected: (place) => {
+                  const formatted =
+                    (place &&
+                      (place.formatted_address ||
+                        place.name ||
+                        locationInput.value)) ||
+                    locationInput.value;
+                  const geometry = place?.geometry?.location;
+                  const lat =
+                    geometry && typeof geometry.lat === "function"
+                      ? geometry.lat()
+                      : null;
+                  const lng =
+                    geometry && typeof geometry.lng === "function"
+                      ? geometry.lng()
+                      : null;
+                  syncLocationValue(formatted, {
+                    name: place?.name ?? formatted,
+                    lat,
+                    lng,
+                  });
+                },
+              });
+            })
+            .catch((error) => {
+              console.warn(
+                "Não foi possível carregar o Google Places Autocomplete.",
+                error
+              );
+            });
+        },
+      });
+
+      window.loadGoogleMapsPlaces =
+        window.loadGoogleMapsPlaces ||
+        function (key) {
+          if (!key) {
+            return Promise.reject(
+              new Error("Google Maps API key is missing or invalid.")
+            );
+          }
+
+          if (
+            window.google &&
+            window.google.maps &&
+            window.google.maps.places
+          ) {
+            return Promise.resolve();
+          }
+
+          if (window.__googleMapsLoadingPromise) {
+            return window.__googleMapsLoadingPromise;
+          }
+
+          window.__googleMapsLoadingPromise = new Promise((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places&callback=__initGooglePlaces`;
+            script.async = true;
+            script.defer = true;
+            script.dataset.googleMaps = "places";
+
+            script.onerror = () => {
+              window.__googleMapsLoadingPromise = undefined;
+              delete window.__initGooglePlaces;
+              script.remove();
+              reject(
+                new Error("Falha ao carregar a biblioteca do Google Maps.")
+              );
+            };
+
+            window.__initGooglePlaces = () => {
+              resolve();
+              window.__googleMapsLoadingPromise = undefined;
+              delete window.__initGooglePlaces;
+            };
+
+            document.head.appendChild(script);
+          });
+
+          return window.__googleMapsLoadingPromise;
+        };
+
+      window.initGroupPlacesAutocomplete =
+        window.initGroupPlacesAutocomplete ||
+        function ({ input, onPlaceSelected }) {
+          if (!input || typeof onPlaceSelected !== "function") return;
+
+          const autocomplete = new google.maps.places.Autocomplete(input, {
+            types: ["establishment"],
+            fields: ["formatted_address", "geometry", "name", "place_id"],
+          });
+
+          autocomplete.addListener("place_changed", () => {
+            const place = autocomplete.getPlace();
+            onPlaceSelected(place);
+          });
+
+          return autocomplete;
+        };
+    </script>
+  </div>
+</Layout>
