@@ -60,6 +60,11 @@ if (!grupoRow) {
 	});
 }
 
+const groupStatusValue = (grupoRow as { status?: string | null }).status ?? 'indefinido';
+if (groupStatusValue !== 'ativo') {
+	return Astro.redirect('/app/grupos');
+}
+
 const organizerId = (grupoRow as { criado_por?: string | null }).criado_por ?? null;
 const isOrganizer = organizerId === userId;
 
@@ -506,6 +511,28 @@ if (Astro.request.method === 'POST') {
 			console.error('Erro ao apagar convite:', error);
 			return respondText('Não foi possível apagar o convite agora.', 500);
 		}
+	} else if (intent === 'deactivate-group') {
+		if (!canEdit) {
+			return respondText('Apenas o organizador pode apagar o grupo.', 403);
+		}
+
+		try {
+			await env.DB.prepare(`UPDATE grupo SET status = ? WHERE id = ?`)
+				.bind('inativo', groupId)
+				.run();
+
+			const redirectTarget = '/app/grupos';
+			if (isHtmxRequest) {
+				return new Response(null, {
+					status: 204,
+					headers: { 'HX-Redirect': redirectTarget }
+				});
+			}
+			return Astro.redirect(redirectTarget);
+		} catch (error) {
+			console.error('Erro ao apagar grupo:', error);
+			return respondText('Não foi possível apagar o grupo agora.', 500);
+		}
 	}
 }
 
@@ -544,7 +571,7 @@ const pendingInviteRecords = (pendingInvitesResult?.results ?? []) as Array<{
 	status?: string | null;
 }>;
 
-const groupStatus = (grupoRow as { status?: string | null }).status ?? 'indefinido';
+const groupStatus = groupStatusValue;
 const isGroupActive = groupStatus === 'ativo';
 
 const formatDateValue = (value?: string | null) => {
@@ -660,33 +687,35 @@ const participantActions = [
 const nextActions = canEdit ? organizerActions : participantActions;
 
 const participantEntries = [
-	...participantRecords.map((participant) => {
-		const displayName = participant.nome;
-		const initials = computeInitials(displayName) || displayName.slice(0, 2).toUpperCase();
-		const isConfirmed = Boolean(
-			typeof participant.is_confirmado === 'number'
-				? participant.is_confirmado
-				: participant.is_confirmado
-		);
-		const statusLabel = isConfirmed ? 'Convite confirmado' : 'Convite pendente';
-		return {
-			id: participant.usuario_id,
-			name: displayName,
-			initials,
-			isConfirmed,
-			statusLabel,
-			inviteTag: isConfirmed ? null : 'Convidado',
-			isPendingInvite: false,
-			modalPayload: {
+	...participantRecords
+		.filter((participant) => participant.usuario_id !== organizerId)
+		.map((participant) => {
+			const displayName = participant.nome;
+			const initials = computeInitials(displayName) || displayName.slice(0, 2).toUpperCase();
+			const isConfirmed = Boolean(
+				typeof participant.is_confirmado === 'number'
+					? participant.is_confirmado
+					: participant.is_confirmado
+			);
+			const statusLabel = isConfirmed ? 'Convite confirmado' : 'Convite pendente';
+			return {
+				id: participant.usuario_id,
 				name: displayName,
 				initials,
-				status: isConfirmed ? 'Convite aceito' : 'Convite aguardando confirmação',
-				inviteId: null,
-				contact: null,
-				isConfirmed
-			}
-		};
-	}),
+				isConfirmed,
+				statusLabel,
+				inviteTag: isConfirmed ? null : 'Convidado',
+				isPendingInvite: false,
+				modalPayload: {
+					name: displayName,
+					initials,
+					status: isConfirmed ? 'Convite aceito' : 'Convite aguardando confirmação',
+					inviteId: null,
+					contact: null,
+					isConfirmed
+				}
+			};
+		}),
 	...pendingInviteRecords.map((invite) => {
 		const contact = invite.email ?? invite.telefone ?? 'Contato não informado';
 		return {
@@ -1017,11 +1046,43 @@ if (isOrganizer) {
 							</div>
 							<div class="flex items-center gap-2">
 								{canEdit && (
-									<ActionButton label="Editar" href={`/app/grupo-novo?grupo=${slug}`}>
-										<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
-											<path d="M5.433 14.433 5 16l1.567-.433 7.602-7.602-1.133-1.133-7.603 7.601Zm8.185-9.185 1.132 1.132 1.247-1.247a.8.8 0 0 0 0-1.132l-.632-.632a.8.8 0 0 0-1.132 0l-1.247 1.247Z" />
-										</svg>
-									</ActionButton>
+									<div class="relative" x-data="{ open: false }">
+										<button
+											type="button"
+											class="scroll-fade inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] px-4 py-2 text-sm font-semibold text-[var(--color-text)] transition hover:text-[var(--color-primary)]"
+											@click="open = !open"
+											@keydown.escape.window="open = false"
+										>
+											Gerenciar grupo
+											<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
+												<path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.94l3.71-3.71a.75.75 0 1 1 1.06 1.06l-4.24 4.25a.75.75 0 0 1-1.06 0L5.21 8.29a.75.75 0 0 1 .02-1.08Z" clip-rule="evenodd" />
+											</svg>
+										</button>
+										<div
+											x-cloak
+											x-show="open"
+											@click.outside="open = false"
+											class="absolute right-0 z-20 mt-2 w-48 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] py-2 shadow-[0_12px_32px_rgba(15,23,42,0.15)]"
+										>
+											<a
+												href={`/app/grupo-novo?grupo=${slug}`}
+												class="flex items-center gap-2 px-4 py-2 text-sm text-[var(--color-text)] transition hover:bg-[rgba(255,209,102,0.2)]"
+												@click="open = false"
+											>
+												Editar grupo
+											</a>
+											<form
+												hx-post={Astro.url.pathname + Astro.url.search}
+												hx-swap="none"
+												method="post"
+												class="flex items-center gap-2 px-4 py-2 text-sm text-red-500 transition hover:bg-red-500/10"
+												@click="open = false"
+											>
+												<input type="hidden" name="intent" value="deactivate-group" />
+												<button type="submit" class="w-full text-left">Apagar grupo</button>
+											</form>
+										</div>
+									</div>
 								)}
 								<ActionButton label="Compartilhar">
 									<svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
