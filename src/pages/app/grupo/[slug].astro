@@ -5,7 +5,7 @@ import Footer from '../../../components/Footer.astro';
 import UpdateItem from '../../../components/UpdateItem.astro';
 import ActionButton from '../../../components/ActionButton.astro';
 import { computeInitials, renderMessageList } from '../../../utils/message-renderer';
-import { sendDrawCompletedEmail } from '../../../utils/email';
+import { sendDrawCompletedEmail, sendInviteEmail } from '../../../utils/email';
 
 export const prerender = false;
 
@@ -406,21 +406,143 @@ if (Astro.request.method === 'POST') {
 				);
 			}
 		}
+	} else if (intent === 'resend-invite') {
+		if (!canEdit) {
+			return respondText('Apenas o organizador pode reenviar convites.', 403);
+		}
+		const inviteIdRaw = formData.get('invite_id');
+		const inviteId =
+			typeof inviteIdRaw === 'string'
+				? inviteIdRaw.trim()
+				: inviteIdRaw
+					? inviteIdRaw.toString().trim()
+					: '';
+		if (!inviteId) {
+			return respondText('Convite inválido.', 400);
+		}
+
+		try {
+			const inviteRow = await env.DB.prepare(
+				`SELECT id, email, token, status
+				 FROM convite
+				 WHERE id = ?
+				   AND grupo_id = ?
+				 LIMIT 1`
+			)
+				.bind(inviteId, groupId)
+				.first();
+
+			if (!inviteRow) {
+				return respondText('Convite não encontrado.', 404);
+			}
+
+			const inviteEmail = (inviteRow as { email?: string | null }).email?.trim();
+			if (!inviteEmail) {
+				return respondText('Este convite não possui email configurado.', 400);
+			}
+			const inviteToken = (inviteRow as { token: string }).token;
+			const groupTitle = (grupoRow as { titulo: string }).titulo;
+			const inviteLink = new URL(
+				`/convite?token=${encodeURIComponent(inviteToken)}`,
+				Astro.url
+			).toString();
+
+			await sendInviteEmail(env, {
+				to: inviteEmail,
+				groupTitle,
+				inviteLink,
+				inviterName: null
+			});
+
+			await env.DB.prepare(`UPDATE convite SET enviado_em = ? WHERE id = ?`)
+				.bind(new Date().toISOString(), inviteId)
+				.run();
+
+			const redirectTarget = `${Astro.url.pathname}${Astro.url.search}`;
+			if (isHtmxRequest) {
+				return new Response(null, {
+					status: 204,
+					headers: { 'HX-Redirect': redirectTarget }
+				});
+			}
+			return Astro.redirect(redirectTarget);
+		} catch (error) {
+			console.error('Erro ao reenviar convite:', error);
+			return respondText('Não foi possível reenviar o convite agora.', 500);
+		}
+	} else if (intent === 'delete-invite') {
+		if (!canEdit) {
+			return respondText('Apenas o organizador pode apagar convites.', 403);
+		}
+		const inviteIdRaw = formData.get('invite_id');
+		const inviteId =
+			typeof inviteIdRaw === 'string'
+				? inviteIdRaw.trim()
+				: inviteIdRaw
+					? inviteIdRaw.toString().trim()
+					: '';
+		if (!inviteId) {
+			return respondText('Convite inválido.', 400);
+		}
+
+		try {
+			await env.DB.prepare(
+				`DELETE FROM convite
+				 WHERE id = ?
+				   AND grupo_id = ?`
+			)
+				.bind(inviteId, groupId)
+				.run();
+
+			const redirectTarget = `${Astro.url.pathname}${Astro.url.search}`;
+			if (isHtmxRequest) {
+				return new Response(null, {
+					status: 204,
+					headers: { 'HX-Redirect': redirectTarget }
+				});
+			}
+			return Astro.redirect(redirectTarget);
+		} catch (error) {
+			console.error('Erro ao apagar convite:', error);
+			return respondText('Não foi possível apagar o convite agora.', 500);
+		}
 	}
 }
 
 const participantsResult = await env.DB.prepare(
-	`SELECT gp.usuario_id, gp.criado_em, COALESCE(u.nome, u.email, 'Participante') AS nome
+	`SELECT gp.usuario_id, gp.criado_em, gp.is_confirmado, COALESCE(u.nome, u.email, 'Participante') AS nome
 	 FROM grupo_participante gp
 	 JOIN usuario u ON u.id = gp.usuario_id
 	 WHERE gp.grupo_id = ?
+	   AND gp.is_ativo = 1
 	 ORDER BY gp.criado_em ASC`
 )
 	.bind(groupId)
 	.all();
 
-const participantRecords = (participantsResult?.results ?? []) as Array<{ usuario_id: string; nome: string; criado_em?: string | null }>;
+const participantRecords = (participantsResult?.results ?? []) as Array<{
+	usuario_id: string;
+	nome: string;
+	criado_em?: string | null;
+	is_confirmado?: number | boolean | null;
+}>;
 const participantsList = participantRecords.map((record) => record.nome);
+
+const pendingInvitesResult = await env.DB.prepare(
+	`SELECT id, email, telefone, status
+	 FROM convite
+	 WHERE grupo_id = ?
+	   AND status = 'pendente'`
+)
+	.bind(groupId)
+	.all();
+
+const pendingInviteRecords = (pendingInvitesResult?.results ?? []) as Array<{
+	id: string;
+	email?: string | null;
+	telefone?: string | null;
+	status?: string | null;
+}>;
 
 const groupStatus = (grupoRow as { status?: string | null }).status ?? 'indefinido';
 const isGroupActive = groupStatus === 'ativo';
@@ -537,15 +659,55 @@ const participantActions = [
 
 const nextActions = canEdit ? organizerActions : participantActions;
 
-const participantEntries = participantsList.map((participant) => {
-	const initials = participant
-		.split(' ')
-		.filter(Boolean)
-		.map((segment) => segment[0]?.toUpperCase() ?? '')
-		.join('')
-		.slice(0, 2);
-	return { name: participant, initials: initials || participant.slice(0, 2).toUpperCase() };
-});
+const participantEntries = [
+	...participantRecords.map((participant) => {
+		const displayName = participant.nome;
+		const initials = computeInitials(displayName) || displayName.slice(0, 2).toUpperCase();
+		const isConfirmed = Boolean(
+			typeof participant.is_confirmado === 'number'
+				? participant.is_confirmado
+				: participant.is_confirmado
+		);
+		const statusLabel = isConfirmed ? 'Convite confirmado' : 'Convite pendente';
+		return {
+			id: participant.usuario_id,
+			name: displayName,
+			initials,
+			isConfirmed,
+			statusLabel,
+			inviteTag: isConfirmed ? null : 'Convidado',
+			isPendingInvite: false,
+			modalPayload: {
+				name: displayName,
+				initials,
+				status: isConfirmed ? 'Convite aceito' : 'Convite aguardando confirmação',
+				inviteId: null,
+				contact: null,
+				isConfirmed
+			}
+		};
+	}),
+	...pendingInviteRecords.map((invite) => {
+		const contact = invite.email ?? invite.telefone ?? 'Contato não informado';
+		return {
+			id: invite.id,
+			name: 'Convite Pendente',
+			initials: 'C',
+			isConfirmed: false,
+			statusLabel: contact,
+			inviteTag: 'Convite pendente',
+			isPendingInvite: true,
+			modalPayload: {
+				name: 'Convite Pendente',
+				initials: 'C',
+				status: 'Convite pendente',
+				inviteId: invite.id,
+				contact,
+				isConfirmed: false
+			}
+		};
+	})
+];
 
 const latestDrawRow = await env.DB.prepare(
 	`SELECT id, sorteado_em
@@ -994,19 +1156,156 @@ if (isOrganizer) {
 				</div>
 	</section>
 
-<section class="space-y-4">
+<section class="space-y-4" x-data="participantModal()">
 	<h2 class="text-xl font-semibold text-[var(--color-text)]">Participantes</h2>
-		<div class="grid grid-cols-2 gap-3 px-4 py-3 sm:grid-cols-3 lg:grid-cols-5">
-					{participantEntries.map((participant) => (
-						<div class="flex items-center gap-3">
-							<span class="flex h-12 w-12 items-center justify-center rounded-full border border-[rgba(230,57,70,0.35)] bg-[rgba(230,57,70,0.12)] text-sm font-semibold uppercase text-[var(--color-primary)] shadow-[0_4px_10px_rgba(230,57,70,0.18)]">
-										{participant.initials}
-									</span>
-									<p class="text-sm text-[var(--color-text)]">{participant.name}</p>
-								</div>
-							))}
+	{participantEntries.length ? (
+		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+			{participantEntries.map((participant) => (
+				<button
+					type="button"
+					class="group flex flex-col gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-4 text-left shadow-[0_6px_14px_rgba(109,76,65,0.08)] transition hover:-translate-y-0.5 hover:border-[var(--color-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+					data-participant={encodeURIComponent(JSON.stringify(participant.modalPayload))}
+					@click="showParticipant($event)"
+				>
+					<div class="flex items-center gap-3">
+						<span class="flex h-12 w-12 items-center justify-center rounded-full border border-[rgba(230,57,70,0.35)] bg-[rgba(230,57,70,0.12)] text-sm font-semibold uppercase text-[var(--color-primary)] shadow-[0_4px_10px_rgba(230,57,70,0.18)]">
+							{participant.initials}
+						</span>
+						<div>
+							<p class="text-sm font-semibold text-[var(--color-text)]">{participant.name}</p>
+							<p class="text-xs text-[var(--color-text-muted)]">{participant.statusLabel}</p>
 						</div>
-		</section>
+					</div>
+					{!participant.isConfirmed && participant.inviteTag && (
+						<span class="inline-flex w-fit items-center rounded-full bg-[rgba(230,57,70,0.12)] px-3 py-1 text-[0.6rem] font-semibold uppercase  text-[var(--color-primary)]">
+							{participant.inviteTag}
+						</span>
+					)}
+				</button>
+			))}
+		</div>
+	) : (
+		<p class="rounded-2xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-6 text-center text-sm text-[var(--color-text-muted)]">
+			Nenhum participante foi convidado ainda. Convide alguém para começar.
+		</p>
+	)}
+
+	<script is:inline>
+window.participantModal = function participantModal() {
+	return {
+		open: false,
+		participant: null,
+		showParticipant(event) {
+			let payload = null;
+			if (event && typeof event === 'object' && 'currentTarget' in event) {
+				const raw = event.currentTarget?.dataset?.participant;
+				if (raw) {
+					try {
+						payload = JSON.parse(decodeURIComponent(raw));
+					} catch (error) {
+						console.error('Erro ao abrir participante:', error);
+					}
+				}
+			} else if (event) {
+				payload = event;
+			}
+
+			if (!payload) return;
+			this.participant = payload;
+			this.open = true;
+			document.body.classList.add('overflow-hidden');
+		},
+		hideModal() {
+			this.open = false;
+			this.participant = null;
+			document.body.classList.remove('overflow-hidden');
+		}
+	};
+};
+	</script>
+
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-[rgba(0,0,0,0.45)] px-4 py-8"
+		x-cloak
+		x-show="open"
+		x-transition.opacity
+		@click.self="hideModal()"
+		@keydown.escape.window="hideModal()"
+	>
+		<div
+			class="w-full max-w-md rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[0_18px_36px_rgba(109,76,65,0.2)]"
+			x-show="open"
+			x-transition.scale
+		>
+			<div class="flex justify-end">
+				<button
+					type="button"
+					class="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-text-muted)] transition hover:text-[var(--color-text)]"
+					@click="hideModal()"
+				>
+					<span class="sr-only">Fechar</span>
+					<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
+						<path
+							fill-rule="evenodd"
+							d="M5.22 5.22a.75.75 0 0 1 1.06 0L10 8.94l3.72-3.72a.75.75 0 1 1 1.06 1.06L11.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06L10 11.06l-3.72 3.72a.75.75 0 1 1-1.06-1.06L8.94 10 5.22 6.28a.75.75 0 0 1 0-1.06Z"
+							clip-rule="evenodd"
+						/>
+					</svg>
+				</button>
+			</div>
+			<div class="flex flex-col items-center gap-4 text-center">
+				<span class="flex h-16 w-16 items-center justify-center rounded-full border border-[rgba(230,57,70,0.35)] bg-[rgba(230,57,70,0.12)] text-base font-semibold uppercase text-[var(--color-primary)] shadow-[0_6px_16px_rgba(230,57,70,0.2)]">
+					<span x-text="participant?.initials ?? ''"></span>
+				</span>
+				<div>
+					<p class="text-2xl font-semibold text-[var(--color-text)]" x-text="participant?.name ?? ''"></p>
+					<p class="mt-1 text-sm text-[var(--color-text-muted)]" x-text="participant?.status ?? ''"></p>
+					<p
+						class="text-xs text-[var(--color-text-muted)]"
+						x-show="participant?.contact"
+						x-text="participant?.contact ? 'Contato: ' + participant.contact : ''"
+					></p>
+				</div>
+				<div class="flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
+					<template x-if="participant?.inviteId">
+						<form
+							hx-post={Astro.url.pathname + Astro.url.search}
+							hx-swap="none"
+							method="post"
+							class="inline-flex flex-1"
+						>
+							<input type="hidden" name="intent" value="resend-invite" />
+							<input type="hidden" name="invite_id" x-bind:value="participant?.inviteId ?? ''" />
+							<button
+								type="submit"
+								class="scroll-fade inline-flex w-full items-center justify-center rounded-full bg-[var(--color-primary)] px-6 py-2 text-sm font-semibold tracking-normal text-[var(--color-primary-foreground)] shadow-[0_10px_24px_rgba(230,57,70,0.2)] transition hover:bg-[var(--color-primary)]/90"
+							>
+								Reenviar convite
+							</button>
+						</form>
+					</template>
+					<template x-if="participant?.inviteId">
+						<form
+							hx-post={Astro.url.pathname + Astro.url.search}
+							hx-swap="none"
+							method="post"
+							class="inline-flex flex-1"
+						>
+							<input type="hidden" name="intent" value="delete-invite" />
+							<input type="hidden" name="invite_id" x-bind:value="participant?.inviteId ?? ''" />
+							<button
+								type="submit"
+								class="scroll-fade inline-flex w-full items-center justify-center rounded-full border border-red-400 px-6 py-2 text-sm font-semibold tracking-normal text-red-500 transition hover:bg-red-500/10"
+							>
+								Apagar convite
+							</button>
+						</form>
+					</template>
+				</div>
+			</div>
+		</div>
+	</div>
+</section>
 
 		<section class="space-y-4">
 			<h2 class="text-xl font-semibold text-[var(--color-text)]">Mensagens</h2>

@@ -26,6 +26,13 @@ type WelcomeEmailOptions = {
   dashboardUrl: string;
 };
 
+type InviteEmailOptions = {
+  to: string;
+  groupTitle: string;
+  inviteLink: string;
+  inviterName?: string | null;
+};
+
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 const DEFAULT_FROM_EMAIL = "onboarding@resend.dev";
 const DEFAULT_FROM_NAME = "Feliz Natal";
@@ -288,6 +295,38 @@ export const sendWelcomeEmail = async (
   return sendEmail(env, {
     to: formatRecipientAddress(options.to, options.name),
     subject: "🎉 Bem-vindo ao Feliz Natal!",
+    html,
+  });
+};
+
+const buildInviteEmail = ({
+  groupTitle,
+  inviteLink,
+  inviterName,
+}: InviteEmailOptions) => {
+  const content = [
+    `<h1 style="font-size:24px;margin:0 0 18px;color:#0f172a;">Você foi convidado para o grupo <span style="color:#2563eb;">${groupTitle}</span></h1>`,
+    renderGreeting(inviterName ?? null),
+    renderParagraph(
+      "Alguém especial convidou você para participar de um amigo secreto no Feliz Natal. Aceite o convite para acompanhar as atualizações, enviar mensagens e participar do sorteio."
+    ),
+    renderButton(inviteLink, "Aceitar convite"),
+    renderParagraph(
+      "Se você já possui conta, basta acessar usando seu login habitual. Caso contrário, criaremos tudo para você em poucos cliques."
+    ),
+    renderParagraph("<strong>Equipe Feliz Natal</strong>"),
+  ].join("");
+  return renderEmailShell(`Convite para o grupo ${groupTitle}`, content);
+};
+
+export const sendInviteEmail = async (
+  env: ResendEnv | null | undefined,
+  options: InviteEmailOptions
+) => {
+  const html = buildInviteEmail(options);
+  return sendEmail(env, {
+    to: options.to,
+    subject: `🎄 Você foi convidado para o grupo ${options.groupTitle}`,
     html,
   });
 };

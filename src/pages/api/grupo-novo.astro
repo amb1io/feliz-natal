@@ -1,5 +1,6 @@
 ---
 import FormSuccess from '../../components/FormSuccess.astro';
+import { sendInviteEmail } from '../../utils/email';
 
 export const prerender = false;
 
@@ -38,6 +39,23 @@ const dataRevelacao = formData.get('data_revelacao')?.toString();
 const status = 'ativo';
 
 const tipoPresente = formData.get('tipo_presente')?.toString() || null;
+
+const buildInviteLink = (token: string) =>
+  new URL(`/convite?token=${encodeURIComponent(token)}`, Astro.url).toString();
+
+const sendInviteSafely = async (email: string | null, token: string, groupTitle: string) => {
+  if (!email) return;
+  try {
+    await sendInviteEmail(env, {
+      to: email,
+      groupTitle,
+      inviteLink: buildInviteLink(token),
+      inviterName: null
+    });
+  } catch (error) {
+    console.error('Erro ao enviar email de convite:', error);
+  }
+};
 const orcamentoMinimo = formData.get('orcamento_minimo')?.toString();
 const orcamentoMaximo = formData.get('orcamento_maximo')?.toString();
 const orcamentoSemLimites = formData.get('orcamento_sem_limites') === 'true';
@@ -253,18 +271,23 @@ if (!titulo || !dataSorteio) {
           if (email || telefone) {
             const key = `${email?.toLowerCase() ?? ''}|${telefone ?? ''}`;
             if (!conviteKeys.has(key)) {
+              const inviteId = crypto.randomUUID();
+              const inviteToken = crypto.randomUUID();
               await insertConvite
                 .bind(
-                  crypto.randomUUID(),
+                  inviteId,
                   grupoId,
                   email,
                   telefone,
-                  crypto.randomUUID(),
+                  inviteToken,
                   'pendente',
                   agora
                 )
                 .run();
               conviteKeys.add(key);
+              if (email) {
+                await sendInviteSafely(email, inviteToken, titulo);
+              }
             }
           }
         }
@@ -392,17 +415,14 @@ if (!titulo || !dataSorteio) {
         }
 
         if (email || telefone) {
+          const inviteId = crypto.randomUUID();
+          const inviteToken = crypto.randomUUID();
           await insertConvite
-            .bind(
-              crypto.randomUUID(),
-              grupoId,
-              email,
-              telefone,
-              crypto.randomUUID(),
-              'pendente',
-              agora
-            )
+            .bind(inviteId, grupoId, email, telefone, inviteToken, 'pendente', agora)
             .run();
+          if (email) {
+            await sendInviteSafely(email, inviteToken, titulo);
+          }
         }
       }
 
