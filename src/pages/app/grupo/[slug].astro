@@ -6,6 +6,7 @@ import UpdateItem from '../../../components/UpdateItem.astro';
 import ActionButton from '../../../components/ActionButton.astro';
 import { computeInitials, renderMessageList } from '../../../utils/message-renderer';
 import { sendDrawCompletedEmail, sendInviteEmail } from '../../../utils/email';
+import { notifyDrawCompletedByPhone, notifyInviteByPhone } from '../../../utils/twilio';
 
 export const prerender = false;
 
@@ -303,6 +304,17 @@ if (Astro.request.method === 'POST') {
 					const groupTitle = (grupoRow as { titulo: string }).titulo;
 					const groupSlug = (grupoRow as { slug: string }).slug;
 					const revealDateValue = (grupoRow as { data_revelacao?: string | null }).data_revelacao ?? null;
+					const revealDateText = (() => {
+						if (!revealDateValue) return null;
+						const date = new Date(revealDateValue);
+						return Number.isNaN(date.getTime())
+							? null
+							: date.toLocaleDateString('pt-BR', {
+									day: '2-digit',
+									month: 'long',
+									year: 'numeric'
+								});
+					})();
 					const groupUrl = new URL(`/app/grupo/${groupSlug}`, Astro.url).toString();
 
 					await env.DB.prepare(
@@ -319,6 +331,7 @@ if (Astro.request.method === 'POST') {
 
 					const notificationPromises: Array<Promise<void>> = [];
 					const emailPromises: Array<Promise<unknown>> = [];
+					const phoneNumbers = new Set<string>();
 					const participantContacts = new Map<
 						string,
 						{ email: string; nome?: string | null }
@@ -347,6 +360,27 @@ if (Astro.request.method === 'POST') {
 						} catch (error) {
 							console.error('Erro ao carregar emails dos participantes:', error);
 						}
+					}
+
+					try {
+						const phonesResult = await env.DB.prepare(
+							`SELECT DISTINCT telefone
+							 FROM convite
+							 WHERE grupo_id = ?
+							   AND telefone IS NOT NULL
+							   AND TRIM(telefone) != ''`
+						)
+							.bind(groupId)
+							.all();
+
+						for (const row of phonesResult?.results ?? []) {
+							const phone = (row as { telefone?: string | null }).telefone?.trim();
+							if (phone) {
+								phoneNumbers.add(phone);
+							}
+						}
+					} catch (error) {
+						console.error('Erro ao carregar telefones dos convites:', error);
 					}
 
 					for (let index = 0; index < participantIds.length; index += 1) {
@@ -383,7 +417,16 @@ if (Astro.request.method === 'POST') {
 						}
 					}
 
-					await Promise.all([...notificationPromises, ...emailPromises]);
+					const phoneNotificationPromises = Array.from(phoneNumbers).map((phone) =>
+						notifyDrawCompletedByPhone(env, {
+							phone,
+							groupTitle,
+							groupUrl,
+							revealDate: revealDateText
+						})
+					);
+
+					await Promise.all([...notificationPromises, ...emailPromises, ...phoneNotificationPromises]);
 
 					const redirectTarget = `${Astro.url.pathname}${Astro.url.search}`;
 					if (isHtmxRequest) {
@@ -428,7 +471,7 @@ if (Astro.request.method === 'POST') {
 
 		try {
 			const inviteRow = await env.DB.prepare(
-				`SELECT id, email, token, status
+				`SELECT id, email, telefone, token, status
 				 FROM convite
 				 WHERE id = ?
 				   AND grupo_id = ?
@@ -442,9 +485,7 @@ if (Astro.request.method === 'POST') {
 			}
 
 			const inviteEmail = (inviteRow as { email?: string | null }).email?.trim();
-			if (!inviteEmail) {
-				return respondText('Este convite não possui email configurado.', 400);
-			}
+			const invitePhone = (inviteRow as { telefone?: string | null }).telefone?.trim();
 			const inviteToken = (inviteRow as { token: string }).token;
 			const groupTitle = (grupoRow as { titulo: string }).titulo;
 			const inviteLink = new URL(
@@ -452,12 +493,22 @@ if (Astro.request.method === 'POST') {
 				Astro.url
 			).toString();
 
-			await sendInviteEmail(env, {
-				to: inviteEmail,
-				groupTitle,
-				inviteLink,
-				inviterName: null
-			});
+			if (inviteEmail) {
+				await sendInviteEmail(env, {
+					to: inviteEmail,
+					groupTitle,
+					inviteLink,
+					inviterName: null
+				});
+			} else if (invitePhone) {
+				await notifyInviteByPhone(env, {
+					phone: invitePhone,
+					groupTitle,
+					inviteLink
+				});
+			} else {
+				return respondText('Este convite não possui contato configurado.', 400);
+			}
 
 			await env.DB.prepare(`UPDATE convite SET enviado_em = ? WHERE id = ?`)
 				.bind(new Date().toISOString(), inviteId)
