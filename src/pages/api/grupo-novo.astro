@@ -1,6 +1,7 @@
 ---
 import FormSuccess from '../../components/FormSuccess.astro';
 import { sendInviteEmail } from '../../utils/email';
+import { notifyInviteByPhone } from '../../utils/twilio';
 
 export const prerender = false;
 
@@ -54,6 +55,18 @@ const sendInviteSafely = async (email: string | null, token: string, groupTitle:
     });
   } catch (error) {
     console.error('Erro ao enviar email de convite:', error);
+  }
+};
+const sendPhoneInviteSafely = async (phone: string | null, token: string, groupTitle: string) => {
+  if (!phone) return;
+  try {
+    await notifyInviteByPhone(env, {
+      phone,
+      groupTitle,
+      inviteLink: buildInviteLink(token)
+    });
+  } catch (error) {
+    console.error('Erro ao enviar convite por telefone:', error);
   }
 };
 const orcamentoMinimo = formData.get('orcamento_minimo')?.toString();
@@ -203,28 +216,53 @@ if (!titulo || !dataSorteio) {
           .bind(grupoId)
           .all();
 
+        const existingParticipantRows = (existingParticipantsResult?.results ?? []) as Array<{
+          usuario_id: string;
+          email?: string | null;
+        }>;
+
         const existingParticipantIds = new Set<string>();
         const existingParticipantEmails = new Map<string, string>();
 
-        for (const row of existingParticipantsResult?.results ?? []) {
-          const record = row as { usuario_id: string; email?: string | null };
-          existingParticipantIds.add(record.usuario_id);
-          if (record.email) {
-            existingParticipantEmails.set(record.email.toLowerCase(), record.usuario_id);
+        for (const row of existingParticipantRows) {
+          existingParticipantIds.add(row.usuario_id);
+          if (row.email) {
+            existingParticipantEmails.set(row.email.toLowerCase(), row.usuario_id);
           }
         }
 
         const existingConvitesResult = await db
-          .prepare('SELECT email, telefone FROM convite WHERE grupo_id = ?')
+          .prepare('SELECT id, email, telefone FROM convite WHERE grupo_id = ?')
           .bind(grupoId)
           .all();
 
         const conviteKeys = new Set<string>();
-        for (const row of existingConvitesResult?.results ?? []) {
-          const record = row as { email?: string | null; telefone?: string | null };
-          const key = `${record.email?.toLowerCase() ?? ''}|${record.telefone ?? ''}`;
-          conviteKeys.add(key);
+        const existingInviteRecords = (existingConvitesResult?.results ?? []) as Array<{
+          id: string;
+          email?: string | null;
+          telefone?: string | null;
+        }>;
+        const existingInviteIdsByKey = new Map<string, string>();
+        const normalizePhoneValue = (value?: string | null) => {
+          if (value === null || value === undefined) return null;
+          const trimmed = value.toString().trim();
+          return trimmed || null;
+        };
+        const buildInviteKey = (emailLower: string | null, phone: string | null) =>
+          emailLower || phone ? `${emailLower ?? ''}|${phone ?? ''}` : null;
+
+        for (const record of existingInviteRecords) {
+          const emailLower = record.email ? record.email.trim().toLowerCase() : null;
+          const phoneValue = normalizePhoneValue(record.telefone ?? null);
+          const key = buildInviteKey(emailLower, phoneValue);
+          if (key) {
+            conviteKeys.add(key);
+            existingInviteIdsByKey.set(key, record.id);
+          }
         }
+
+        const desiredInviteKeys = new Set<string>();
+        const desiredParticipantEmails = new Set<string>();
 
         const insertParticipante = db.prepare(
           `INSERT INTO grupo_participante (grupo_id, usuario_id, perfil, is_confirmado, is_revelado, is_ativo, criado_em, aderido_em)
@@ -238,8 +276,15 @@ if (!titulo || !dataSorteio) {
 
         for (const participante of participantes) {
           const email = (participante.email ?? '').toString().trim() || null;
-          const telefone = (participante.telefone ?? '').toString().trim() || null;
+          const telefone = normalizePhoneValue(participante.telefone ?? null);
           const emailLower = email ? email.toLowerCase() : null;
+          if (emailLower) {
+            desiredParticipantEmails.add(emailLower);
+          }
+          const inviteKey = buildInviteKey(emailLower, telefone);
+          if (inviteKey) {
+            desiredInviteKeys.add(inviteKey);
+          }
 
           if (email) {
             let usuarioId: string | null = null;
@@ -269,8 +314,7 @@ if (!titulo || !dataSorteio) {
           }
 
           if (email || telefone) {
-            const key = `${email?.toLowerCase() ?? ''}|${telefone ?? ''}`;
-            if (!conviteKeys.has(key)) {
+            if (inviteKey && !conviteKeys.has(inviteKey)) {
               const inviteId = crypto.randomUUID();
               const inviteToken = crypto.randomUUID();
               await insertConvite
@@ -284,12 +328,49 @@ if (!titulo || !dataSorteio) {
                   agora
                 )
                 .run();
-              conviteKeys.add(key);
+              conviteKeys.add(inviteKey);
               if (email) {
                 await sendInviteSafely(email, inviteToken, titulo);
               }
+              if (telefone) {
+                await sendPhoneInviteSafely(telefone, inviteToken, titulo);
+              }
             }
           }
+        }
+
+        const participantsToRemove: string[] = [];
+        for (const row of existingParticipantRows) {
+          if (row.usuario_id === session) continue;
+          const emailLower = row.email ? row.email.toLowerCase() : null;
+          if (!emailLower || !desiredParticipantEmails.has(emailLower)) {
+            participantsToRemove.push(row.usuario_id);
+          }
+        }
+
+        for (const participantId of participantsToRemove) {
+          await db
+            .prepare(
+              `DELETE FROM grupo_participante
+               WHERE grupo_id = ?
+                 AND usuario_id = ?`
+            )
+            .bind(grupoId, participantId)
+            .run();
+        }
+
+        const invitesToRemove: string[] = [];
+        for (const [key, inviteId] of existingInviteIdsByKey.entries()) {
+          if (!desiredInviteKeys.has(key)) {
+            invitesToRemove.push(inviteId);
+          }
+        }
+
+        for (const inviteId of invitesToRemove) {
+          await db
+            .prepare('DELETE FROM convite WHERE id = ? AND grupo_id = ?')
+            .bind(inviteId, grupoId)
+            .run();
         }
 
         successProps = {
@@ -422,6 +503,9 @@ if (!titulo || !dataSorteio) {
             .run();
           if (email) {
             await sendInviteSafely(email, inviteToken, titulo);
+          }
+          if (telefone) {
+            await sendPhoneInviteSafely(telefone, inviteToken, titulo);
           }
         }
       }
