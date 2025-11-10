@@ -6,7 +6,7 @@ const siteMetadata = {
   description:
     "Gerencie sorteios, convites e listas de presentes em um painel inteligente feito para celebrar o Natal sem stress.",
   url: "https://feliz.natal.br/",
-  imagePath: "/logo-alternativo.png",
+  imagePath: "/og-image.png",
 };
 
 const absoluteOgImage = new URL(
@@ -21,6 +21,11 @@ const absoluteOgImage = new URL(
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="icon" sizes="192x192" href="/android-chrome-192x192.png" />
+    <link rel="icon" sizes="512x512" href="/android-chrome-512x512.png" />
     <meta name="generator" content={Astro.generator} />
     <title>{siteMetadata.title}</title>
     <meta name="description" content={siteMetadata.description} />
