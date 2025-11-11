@@ -1,0 +1,97 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout>
+  <main class="mx-auto max-w-4xl px-6 py-16 text-[var(--color-text)]">
+    <header class="mb-10 space-y-3">
+      <p class="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--color-text-muted)]">
+        Política de Privacidade
+      </p>
+      <h1 class="text-3xl font-semibold">Compromisso com a LGPD</h1>
+      <p class="text-sm text-[var(--color-text-muted)]">
+        Esta política descreve como o Feliz Natal coleta, utiliza e protege dados pessoais,
+        garantindo conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018).
+      </p>
+    </header>
+
+    <section class="space-y-6">
+      <article class="space-y-3 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+        <h2 class="text-xl font-semibold">1. Informações Coletadas</h2>
+        <p class="text-sm leading-relaxed text-[var(--color-text-muted)]">
+          Coletamos dados cadastrais (nome, e-mail, telefone), preferências de presentes,
+          informações de login social (Google/Microsoft), registros de mensagens e dados
+          técnicos de acesso (IP, dispositivo, cookies estritamente necessários).
+        </p>
+      </article>
+
+      <article class="space-y-3 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+        <h2 class="text-xl font-semibold">2. Finalidades do Tratamento</h2>
+        <ul class="list-disc space-y-2 pl-6 text-sm leading-relaxed text-[var(--color-text-muted)]">
+          <li>Operar a plataforma de sorteios e convites entre participantes.</li>
+          <li>Garantir comunicações essenciais (e-mail, SMS, WhatsApp) sobre convites e sorteios.</li>
+          <li>Monitorar segurança, prevenir fraudes e cumprir obrigações legais.</li>
+          <li>Melhorar a experiência do usuário e oferecer suporte personalizado.</li>
+        </ul>
+      </article>
+
+      <article class="space-y-3 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+        <h2 class="text-xl font-semibold">3. Base Legal</h2>
+        <p class="text-sm leading-relaxed text-[var(--color-text-muted)]">
+          Utilizamos consentimento, execução de contrato, legítimo interesse e cumprimento
+          de obrigações legais como bases para o tratamento. Sempre que necessário, solicitamos
+          novo consentimento ou oferecemos meios claros para revogá-lo.
+        </p>
+      </article>
+
+      <article class="space-y-3 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+        <h2 class="text-xl font-semibold">4. Compartilhamento</h2>
+        <p class="text-sm leading-relaxed text-[var(--color-text-muted)]">
+          Compartilhamos dados apenas com operadores que nos auxiliam em hospedagem, envio
+          de mensagens, autenticação e análise de uso. Todos seguem cláusulas contratuais
+          que exigem confidencialidade e aderência à LGPD.
+        </p>
+      </article>
+
+      <article class="space-y-3 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+        <h2 class="text-xl font-semibold">5. Direitos dos Titulares</h2>
+        <p class="text-sm leading-relaxed text-[var(--color-text-muted)]">
+          Você pode solicitar confirmação de tratamento, acesso, correção, portabilidade,
+          anonimização, bloqueio, exclusão e informações sobre compartilhamento. Basta enviar
+          um pedido autenticado para
+          <a class="text-[var(--color-primary)] underline" href="mailto:lgpd@feliz.natal.br">lgpd@feliz.natal.br</a>.
+        </p>
+      </article>
+
+      <article class="space-y-3 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+        <h2 class="text-xl font-semibold">6. Retenção e Segurança</h2>
+        <p class="text-sm leading-relaxed text-[var(--color-text-muted)]">
+          Os dados ficam armazenados apenas pelo tempo necessário às finalidades descritas
+          ou conforme exigido em lei. Adotamos criptografia, controles de acesso e auditoria
+          contínua para proteger as informações pessoais.
+        </p>
+      </article>
+
+      <article class="space-y-3 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+        <h2 class="text-xl font-semibold">7. Encarregado (DPO)</h2>
+        <p class="text-sm leading-relaxed text-[var(--color-text-muted)]">
+          O Feliz Natal designou um encarregado pelo tratamento de dados pessoais. Entre em contato
+          pelo e-mail
+          <a class="text-[var(--color-primary)] underline" href="mailto:privacidade@feliz.natal.br">privacidade@feliz.natal.br</a>
+          para esclarecimentos adicionais ou reclamações.
+        </p>
+      </article>
+
+      <article class="space-y-3 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5">
+        <h2 class="text-xl font-semibold">8. Atualizações desta Política</h2>
+        <p class="text-sm leading-relaxed text-[var(--color-text-muted)]">
+          Podemos atualizar este documento para refletir melhorias ou novas exigências legais.
+          Avisaremos sobre alterações relevantes e manteremos a data de revisão sempre visível.
+        </p>
+        <p class="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--color-text-muted)]">
+          Última atualização: {new Date().toLocaleDateString("pt-BR")}
+        </p>
+      </article>
+    </section>
+  </main>
+</Layout>
