@@ -1,0 +1,194 @@
+---
+import Layout from "../../../layouts/Layout.astro";
+import AppHeader from "../../../components/AppHeader.astro";
+
+export const prerender = false;
+
+const sessionCookie = Astro.cookies.get("felizNatalSession");
+const sessionId = sessionCookie?.value ?? null;
+if (!sessionId) {
+  return Astro.redirect("/app/");
+}
+
+const env =
+  Astro.locals.cloudflare?.env ??
+  Astro.locals.runtime?.env ??
+  Astro.locals?.env ??
+  null;
+
+const requestedUserId = Astro.params.id?.trim();
+if (!requestedUserId) {
+  return Astro.redirect("/app/presentes");
+}
+
+type PresentRecord = {
+  id: string;
+  titulo: string;
+  price: string | null;
+  source: string;
+  image: string | null;
+  created_at: string | null;
+};
+
+let ownerName = "Participante";
+let presents: PresentRecord[] = [];
+
+if (env?.DB) {
+  try {
+    const userResult = await env.DB.prepare(
+      `SELECT nome
+         FROM usuario
+        WHERE id = ?
+        LIMIT 1`
+    )
+      .bind(requestedUserId)
+      .first();
+
+    if (!userResult) {
+      return new Response("Usuário não encontrado.", { status: 404 });
+    }
+
+    ownerName =
+      (userResult as { nome?: string | null })?.nome?.trim() || ownerName;
+
+    const presentResult = await env.DB.prepare(
+      `SELECT id,
+              titulo,
+              price,
+              source,
+              image,
+              created_at
+         FROM presentes
+        WHERE deleted_at IS NULL
+          AND usuario_id = ?
+        ORDER BY datetime(coalesce(created_at, '1970-01-01')) DESC`
+    )
+      .bind(requestedUserId)
+      .all();
+
+    presents = (presentResult?.results ?? []) as PresentRecord[];
+  } catch (error) {
+    console.error("Erro ao carregar presentes do usuário:", error);
+  }
+}
+
+const ownerFirstName = ownerName.split(" ")[0] || ownerName;
+
+const buildTrackedUrl = (rawUrl: string) => {
+  try {
+    const url = new URL(rawUrl);
+    url.searchParams.set("utm_source", "feliznatalbr");
+    url.searchParams.set("utm_medium", "wishlist");
+    url.searchParams.set("utm_campaign", "lista-presentes");
+    return url.toString();
+  } catch {
+    return rawUrl;
+  }
+};
+
+const giftItems = presents.map((present) => ({
+  id: present.id,
+  title: present.titulo,
+  price: present.price,
+  image: present.image,
+  url: buildTrackedUrl(present.source),
+}));
+---
+
+<Layout title={`Lista de Presentes · ${ownerName}`}>
+  <div class="flex min-h-screen flex-col bg-transparent">
+    <AppHeader />
+    <main class="flex-1 bg-[var(--color-background)] py-16 text-[var(--color-text)]">
+      <section class="mx-auto flex max-w-5xl flex-col gap-10 px-6">
+        <header class="space-y-4 text-center">
+          <p class="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--color-text-muted)]">
+            Feliz Natal · Presentes
+          </p>
+          <h1 class="text-4xl font-semibold text-[var(--color-text)] sm:text-5xl">
+            Veja a lista de {ownerName}
+          </h1>
+          <p class="mx-auto max-w-3xl text-lg leading-relaxed text-[var(--color-text-muted)]">
+            Descubra as ideias de presentes que {ownerFirstName} separou para inspirar a celebração deste ano.
+            Compartilhe carinho, anote inspirações e surpreenda no grande dia! 🎁
+          </p>
+        </header>
+
+        <div class="space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+                Coleção especial
+              </p>
+              <h2 class="text-2xl font-semibold text-[var(--color-text)]">Lista de presentes</h2>
+            </div>
+            <span
+              class="rounded-full border border-[var(--color-border)] px-4 py-1 text-sm font-semibold text-[var(--color-text-muted)]"
+            >
+              {giftItems.length === 1 ? "1 item" : `${giftItems.length} itens`}
+            </span>
+          </div>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            {
+              giftItems.length ? (
+                giftItems.map((item) => (
+                  <article
+                    class="flex flex-col gap-4 rounded-[1.5rem] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[0_10px_30px_rgba(16,24,40,0.06)] sm:flex-row sm:items-stretch"
+                  >
+                    <div
+                      class="relative flex h-48 w-full items-center justify-center overflow-hidden rounded-2xl bg-[var(--color-background)] sm:h-36 sm:w-48"
+                    >
+                      {
+                        item.image ? (
+                          <img
+                            src={item.image}
+                            alt={item.title ? `Imagem de ${item.title}` : "Imagem do presente"}
+                            class="h-full w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                            referrerpolicy="no-referrer"
+                          />
+                        ) : (
+                          <div
+                            class="flex h-full w-full flex-col items-center justify-center gap-1 rounded-2xl bg-[var(--color-background)] text-center text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+                          >
+                            Sem imagem
+                          </div>
+                        )
+                      }
+                    </div>
+                    <div class="flex flex-1 flex-col justify-between gap-6">
+                      <div class="space-y-2">
+                        <p class="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+                          Presente
+                        </p>
+                        <h3 class="text-xl font-semibold text-[var(--color-text)]">
+                          {item.title ?? "Produto sem título"}
+                        </h3>
+                        <p class="text-base text-[var(--color-text-muted)]">
+                          {item.price ? `Preço: ${item.price}` : "Preço não disponível"}
+                        </p>
+                      </div>
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex items-center justify-center rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-semibold uppercase tracking-[0.25em] text-white transition hover:bg-[var(--color-accent)]/90"
+                      >
+                        Abrir produto
+                      </a>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p class="text-center text-sm text-[var(--color-text-muted)] sm:col-span-2">
+                  Nenhum presente foi adicionado ainda. Volte em breve para novas inspirações!
+                </p>
+              )
+            }
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</Layout>
