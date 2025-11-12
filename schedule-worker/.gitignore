@@ -1,0 +1,5 @@
+node_modules
+.wrangler
+shared
+.DS_Store
+.env

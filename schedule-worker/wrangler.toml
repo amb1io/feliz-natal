@@ -1,0 +1,12 @@
+name = "feliz-natal-schedule-worker"
+main = "src/index.ts"
+compatibility_date = "2024-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["0 12 * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "feliz-natal"
+database_id = "6aab0390-a39d-468a-9cb6-2e6b8093d8a8"
