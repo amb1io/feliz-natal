@@ -10,3 +10,18 @@ crons = ["0 12 * * *"]
 binding = "DB"
 database_name = "feliz-natal"
 database_id = "6aab0390-a39d-468a-9cb6-2e6b8093d8a8"
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
