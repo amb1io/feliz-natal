@@ -737,36 +737,42 @@ const participantActions = [
 
 const nextActions = canEdit ? organizerActions : participantActions;
 
+const organizerParticipantRecord =
+	organizerId ? participantRecords.find((participant) => participant.usuario_id === organizerId) ?? null : null;
+
+const orderedParticipantRecords = [
+	...(organizerParticipantRecord ? [organizerParticipantRecord] : []),
+	...participantRecords.filter((participant) => participant.usuario_id !== organizerId)
+];
+
 const participantEntries = [
-	...participantRecords
-		.filter((participant) => participant.usuario_id !== organizerId)
-		.map((participant) => {
-			const displayName = participant.nome;
-			const initials = computeInitials(displayName) || displayName.slice(0, 2).toUpperCase();
-			const isConfirmed = Boolean(
-				typeof participant.is_confirmado === 'number'
-					? participant.is_confirmado
-					: participant.is_confirmado
-			);
-			const statusLabel = isConfirmed ? 'Convite confirmado' : 'Convite pendente';
-			return {
-				id: participant.usuario_id,
+	...orderedParticipantRecords.map((participant) => {
+		const displayName = participant.nome;
+		const initials = computeInitials(displayName) || displayName.slice(0, 2).toUpperCase();
+		const isRecordOrganizer = organizerId ? participant.usuario_id === organizerId : false;
+		const isConfirmed = Boolean(
+			typeof participant.is_confirmado === 'number' ? participant.is_confirmado : participant.is_confirmado
+		);
+		const statusLabel = isRecordOrganizer ? 'Organizador' : isConfirmed ? 'Convite confirmado' : 'Convite pendente';
+		return {
+			id: participant.usuario_id,
+			name: displayName,
+			initials,
+			isConfirmed,
+			statusLabel,
+			inviteTag: isRecordOrganizer ? null : isConfirmed ? null : 'Convidado',
+			isPendingInvite: false,
+			modalPayload: {
+				userId: participant.usuario_id,
 				name: displayName,
 				initials,
-				isConfirmed,
-				statusLabel,
-				inviteTag: isConfirmed ? null : 'Convidado',
-				isPendingInvite: false,
-				modalPayload: {
-					name: displayName,
-					initials,
-					status: isConfirmed ? 'Convite aceito' : 'Convite aguardando confirmação',
-					inviteId: null,
-					contact: null,
-					isConfirmed
-				}
-			};
-		}),
+				status: statusLabel,
+				inviteId: null,
+				contact: null,
+				isConfirmed
+			}
+		};
+	}),
 	...pendingInviteRecords.map((invite) => {
 		const contact = invite.email ?? invite.telefone ?? 'Contato não informado';
 		return {
@@ -778,6 +784,7 @@ const participantEntries = [
 			inviteTag: 'Convite pendente',
 			isPendingInvite: true,
 			modalPayload: {
+				userId: null,
 				name: 'Convite Pendente',
 				initials: 'C',
 				status: 'Convite pendente',
@@ -1269,7 +1276,10 @@ if (isOrganizer) {
 	</section>
 
 <section class="space-y-4" x-data="participantModal()">
-	<h2 class="text-xl font-semibold text-[var(--color-text)]">Participantes</h2>
+	<div class="space-y-1">
+		<h2 class="text-xl font-semibold text-[var(--color-text)]">Participantes</h2>
+		<p class="text-sm text-[var(--color-text-muted)]">Clique no participante para ver sua lista de presentes.</p>
+	</div>
 	{participantEntries.length ? (
 		<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
 			{participantEntries.map((participant) => (
@@ -1323,6 +1333,10 @@ window.participantModal = function participantModal() {
 			}
 
 			if (!payload) return;
+			if (payload.userId) {
+				window.location.href = `/app/presentes/${encodeURIComponent(payload.userId)}`;
+				return;
+			}
 			this.participant = payload;
 			this.open = true;
 			document.body.classList.add('overflow-hidden');
