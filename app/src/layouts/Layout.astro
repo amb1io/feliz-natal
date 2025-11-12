@@ -54,6 +54,86 @@ const absoluteOgImage = new URL(
   </head>
   <body>
     <slot />
+    <script is:inline>
+      (function () {
+        if (!("serviceWorker" in navigator)) {
+          window.__FelizNatalPrecache = () => {};
+          return;
+        }
+
+        const pending = new Set();
+        let activeRegistration = null;
+
+        const normalize = (value) => {
+          if (!value) return null;
+          try {
+            const url = new URL(value, window.location.origin);
+            return url.pathname + url.search;
+          } catch (err) {
+            console.warn("Não foi possível normalizar a rota para cache:", value);
+            return null;
+          }
+        };
+
+        const flushQueue = () => {
+          if (!activeRegistration?.active || pending.size === 0) return;
+          activeRegistration.active.postMessage({
+            type: "PRECACHE",
+            urls: Array.from(pending)
+          });
+          pending.clear();
+        };
+
+        const ensureRegistrationReady = () => {
+          return navigator.serviceWorker.ready
+            .then((registration) => {
+              if (registration) {
+                activeRegistration = registration;
+                flushQueue();
+              }
+              return registration;
+            })
+            .catch((error) => {
+              console.warn("Service worker não ficou pronto para cache antecipado:", error);
+            });
+        };
+
+        window.__FelizNatalPrecache = (routes) => {
+          const values = Array.isArray(routes) ? routes : [routes];
+          values.forEach((route) => {
+            const normalized = normalize(route);
+            if (normalized) pending.add(normalized);
+          });
+          if (activeRegistration?.active) {
+            flushQueue();
+          } else {
+            ensureRegistrationReady();
+          }
+        };
+
+        const register = () => {
+          navigator.serviceWorker
+            .register("/sw.js")
+            .then((registration) => {
+              if (registration?.active) {
+                activeRegistration = registration;
+                flushQueue();
+              } else {
+                ensureRegistrationReady();
+              }
+            })
+            .catch((error) =>
+              console.error("Falha ao registrar o service worker", error)
+            );
+        };
+
+        if (document.readyState === "complete") {
+          register();
+        } else {
+          window.addEventListener("load", register, { once: true });
+        }
+      })();
+    </script>
   </body>
 </html>
 
