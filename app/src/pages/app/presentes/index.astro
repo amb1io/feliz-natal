@@ -1,0 +1,599 @@
+---
+import Layout from "../../../layouts/Layout.astro";
+import AppHeader from "../../../components/AppHeader.astro";
+
+export const prerender = false;
+
+const sessionCookie = Astro.cookies.get("felizNatalSession");
+const sessionId = sessionCookie?.value ?? null;
+if (!sessionId) {
+  return Astro.redirect("/app/");
+}
+
+const env =
+  Astro.locals.cloudflare?.env ??
+  Astro.locals.runtime?.env ??
+  Astro.locals?.env ??
+  null;
+
+type PresentRecord = {
+  id: string;
+  titulo: string;
+  price: string | null;
+  source: string;
+  image: string | null;
+  created_at: string | null;
+};
+
+let initialPresents: PresentRecord[] = [];
+if (env?.DB && sessionId) {
+  try {
+    const result = await env.DB.prepare(
+      `SELECT id,
+              titulo,
+              price,
+              source,
+              image,
+              created_at
+         FROM presentes
+        WHERE deleted_at IS NULL
+          AND usuario_id = ?
+        ORDER BY datetime(coalesce(created_at, '1970-01-01')) DESC`
+    )
+      .bind(sessionId)
+      .all();
+
+    initialPresents = (result?.results ?? []) as PresentRecord[];
+  } catch (error) {
+    console.error("Erro ao carregar presentes:", error);
+  }
+}
+
+const initialGiftItems = initialPresents.map((present) => ({
+  id: present.id,
+  title: present.titulo,
+  price: present.price,
+  image: present.image,
+  url: present.source,
+}));
+
+const buildTrackedUrl = (rawUrl: string) => {
+  try {
+    const url = new URL(rawUrl);
+    url.searchParams.set("utm_source", "feliznatalbr");
+    url.searchParams.set("utm_medium", "wishlist");
+    url.searchParams.set("utm_campaign", "lista-presentes");
+    return url.toString();
+  } catch {
+    return rawUrl;
+  }
+};
+
+const serverGiftItems = initialGiftItems.map((gift) => ({
+  ...gift,
+  trackedUrl: buildTrackedUrl(gift.url),
+}));
+
+const initialCountLabel =
+  initialGiftItems.length === 1 ? "1 item" : `${initialGiftItems.length} itens`;
+
+const initialGiftItemsJson = JSON.stringify(initialGiftItems).replace(
+  /</g,
+  "\\u003c"
+);
+---
+
+<Layout title="Lista de Presentes">
+  <div class="flex min-h-screen flex-col bg-transparent">
+    <AppHeader />
+    <main
+      class="flex-1 bg-[var(--color-background)] py-16 text-[var(--color-text)]"
+    >
+      <section class="mx-auto flex max-w-5xl flex-col gap-10 px-6">
+        <header class="space-y-4 text-center">
+          <p
+            class="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--color-text-muted)]"
+          >
+            Feliz Natal · Presentes
+          </p>
+          <h1
+            class="text-4xl font-semibold text-[var(--color-text)] sm:text-5xl"
+          >
+            Monte sua lista perfeita em segundos
+          </h1>
+          <p
+            class="mx-auto max-w-3xl text-lg leading-relaxed text-[var(--color-text-muted)]"
+          >
+            Cole o link de um produto no seu site favorito. Nós buscamos imagem,
+            título e preço automaticamente usando os metadados da página e
+            adicionamos tudo a uma lista compartilhável.
+          </p>
+        </header>
+
+        <form
+          id="gift-form"
+          class="rounded-[2rem] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[0_20px_45px_rgba(16,24,40,0.08)]"
+          autocomplete="off"
+        >
+          <div class="space-y-2">
+            <label
+              for="gift-url"
+              class="text-sm font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+              >URL do produto</label
+            >
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <input
+                id="gift-url"
+                name="productUrl"
+                type="url"
+                required
+                inputmode="url"
+                placeholder="https://loja-virtual.com/produto"
+                class="flex-1 rounded-2xl border border-[var(--color-border)] bg-[var(--color-background)] px-4 py-3 text-base text-[var(--color-text)] outline-none transition focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/40"
+              />
+              <button
+                type="submit"
+                class="w-full rounded-2xl bg-[var(--color-primary)] px-6 py-3 text-sm font-semibold uppercase tracking-[0.25em] text-[var(--color-primary-foreground)] transition hover:bg-[var(--color-primary)]/90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+              >
+                adicionar na lista
+              </button>
+            </div>
+            <p
+              id="gift-feedback"
+              class="text-sm font-medium text-[var(--color-text-muted)] transition-colors"
+            >
+              Cole o link de um produto para começar.
+            </p>
+          </div>
+        </form>
+
+        <div class="space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p
+                class="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+              >
+                Sua coleção
+              </p>
+              <h2 class="text-2xl font-semibold text-[var(--color-text)]">
+                Lista de presentes
+              </h2>
+            </div>
+            <span
+              id="gift-counter"
+              class="rounded-full border border-[var(--color-border)] px-4 py-1 text-sm font-semibold text-[var(--color-text-muted)]"
+            >
+              {initialCountLabel}
+            </span>
+          </div>
+          <div id="gift-list" class="grid gap-4 sm:grid-cols-2">
+            {
+              serverGiftItems.length ? (
+                serverGiftItems.map((item) => (
+                  <article class="relative flex flex-col gap-4 rounded-[1.5rem] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[0_10px_30px_rgba(16,24,40,0.06)] sm:flex-row sm:items-stretch">
+                    <button
+                      type="button"
+                      data-role="delete"
+                      class="group absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-text-muted)] transition hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)] hover:text-[var(--color-primary-foreground)]"
+                      aria-label="Remover presente"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        class="h-4 w-4"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M6 6l12 12M6 18 18 6"
+                        />
+                      </svg>
+                    </button>
+                    <div class="relative flex h-48 w-full items-center justify-center overflow-hidden rounded-2xl bg-[var(--color-background)] sm:h-36 sm:w-48">
+                      {item.image ? (
+                        <img
+                          src={item.image}
+                          alt={
+                            item.title
+                              ? `Imagem de ${item.title}`
+                              : "Imagem do presente"
+                          }
+                          class="h-full w-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                          referrerpolicy="no-referrer"
+                        />
+                      ) : (
+                        <div class="flex flex-col items-center justify-center gap-1 text-center text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+                          Sem imagem
+                        </div>
+                      )}
+                    </div>
+                    <div class="flex flex-1 flex-col justify-between gap-6">
+                      <div class="space-y-2">
+                        <p class="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
+                          Presente
+                        </p>
+                        <h3 class="text-xl font-semibold text-[var(--color-text)]">
+                          {item.title ?? "Produto sem título"}
+                        </h3>
+                        <p class="text-base text-[var(--color-text-muted)]">
+                          {item.price
+                            ? `Preço: ${item.price}`
+                            : "Preço não disponível"}
+                        </p>
+                      </div>
+                      <a
+                        href={item.trackedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex items-center justify-center rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-semibold uppercase tracking-[0.25em] text-white transition hover:bg-[var(--color-accent)]/90"
+                      >
+                        Abrir produto
+                      </a>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p class="text-center text-sm text-[var(--color-text-muted)]">
+                  Nenhum presente por aqui ainda.
+                </p>
+              )
+            }
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <template id="gift-card-template">
+    <article
+      class="relative flex flex-col gap-4 rounded-[1.5rem] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[0_10px_30px_rgba(16,24,40,0.06)] sm:flex-row sm:items-stretch"
+    >
+      <button
+        type="button"
+        data-role="delete"
+        class="group absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-text-muted)] transition hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)] hover:text-[var(--color-primary-foreground)]"
+        aria-label="Remover presente"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          class="h-4 w-4"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M6 6l12 12M6 18 18 6"></path>
+        </svg>
+      </button>
+      <div
+        class="relative flex h-48 w-full items-center justify-center overflow-hidden rounded-2xl bg-[var(--color-background)] sm:h-36 sm:w-48"
+      >
+        <img
+          data-role="image"
+          alt=""
+          class="hidden h-full w-full object-cover transition group-hover:scale-105"
+          loading="lazy"
+          decoding="async"
+          referrerpolicy="no-referrer"
+        />
+        <div
+          data-role="placeholder"
+          class="flex flex-col items-center justify-center gap-1 text-center text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+        >
+          Sem imagem
+        </div>
+      </div>
+      <div class="flex flex-1 flex-col justify-between gap-6">
+        <div class="space-y-2">
+          <p
+            class="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+          >
+            Presente
+          </p>
+          <h3
+            data-role="title"
+            class="text-xl font-semibold text-[var(--color-text)]"
+          >
+          </h3>
+          <p data-role="price" class="text-base text-[var(--color-text-muted)]">
+          </p>
+        </div>
+        <a
+          data-role="link"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center justify-center rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-semibold uppercase tracking-[0.25em] text-white transition hover:bg-[var(--color-accent)]/90"
+        >
+          Abrir produto
+        </a>
+      </div>
+    </article>
+  </template>
+
+  <script type="module" define:vars={{ initialGiftItemsJson }}>
+    const form = document.querySelector("#gift-form");
+    const input = document.querySelector("#gift-url");
+    const submitButton = form?.querySelector('button[type="submit"]');
+    const feedback = document.querySelector("#gift-feedback");
+    const list = document.querySelector("#gift-list");
+    const counter = document.querySelector("#gift-counter");
+    const template = document.querySelector("#gift-card-template");
+
+    /**
+     * @typedef {Object} GiftItem
+     * @property {string} id
+     * @property {string | null} title
+     * @property {string | null} price
+     * @property {string | null} image
+     * @property {string} url
+     */
+
+    const normalizeUrl = (value) => {
+      if (!value) return "";
+      try {
+        return new URL(value).toString();
+      } catch {
+        return value.trim();
+      }
+    };
+
+    const buildTrackedUrl = (rawUrl) => {
+      if (!rawUrl) return "";
+      try {
+        const url = new URL(rawUrl);
+        url.searchParams.set("utm_source", "feliznatalbr");
+        url.searchParams.set("utm_medium", "wishlist");
+        url.searchParams.set("utm_campaign", "lista-presentes");
+        return url.toString();
+      } catch {
+        return rawUrl;
+      }
+    };
+
+    /** @type {GiftItem[]} */
+    let items = [];
+    try {
+      const parsed = JSON.parse(initialGiftItemsJson ?? "[]");
+      if (Array.isArray(parsed)) {
+        items = parsed.map((item) => ({
+          id: item.id,
+          title: item.title ?? null,
+          price: item.price ?? null,
+          image: item.image ?? null,
+          url: item.url,
+        }));
+      }
+    } catch (error) {
+      console.error("Erro ao interpretar presentes iniciais:", error);
+    }
+
+    const FEEDBACK_CLASSES = {
+      info: "text-[var(--color-text-muted)]",
+      success: "text-[var(--color-secondary)]",
+      warning: "text-[var(--color-accent)]",
+      error: "text-[var(--color-primary)]",
+    };
+
+    const setFeedback = (message, type = "info") => {
+      if (!feedback) return;
+      const base = "text-sm font-medium transition-colors";
+      const tone = FEEDBACK_CLASSES[type] ?? FEEDBACK_CLASSES.info;
+      feedback.textContent = message;
+      feedback.className = `${base} ${tone}`;
+    };
+
+    const updateCounter = () => {
+      if (!counter) return;
+      const count = items.length;
+      counter.textContent = count === 1 ? "1 item" : `${count} itens`;
+    };
+
+    const renderEmptyState = () => {
+      if (!list) return;
+      list.innerHTML = "";
+      const empty = document.createElement("p");
+      empty.className = "text-center text-sm text-[var(--color-text-muted)]";
+      empty.textContent = "Nenhum presente por aqui ainda.";
+      list.appendChild(empty);
+    };
+
+    const renderList = () => {
+      if (!list || !template) return;
+      list.innerHTML = "";
+
+      if (items.length === 0) {
+        renderEmptyState();
+        return;
+      }
+
+      items.forEach((item) => {
+        const fragment = template.content.cloneNode(true);
+        const article = fragment.querySelector("article");
+        if (!article) return;
+
+        const titleEl = article.querySelector('[data-role="title"]');
+        const priceEl = article.querySelector('[data-role="price"]');
+        const linkEl = article.querySelector('[data-role="link"]');
+        const imageEl = article.querySelector('[data-role="image"]');
+        const placeholderEl = article.querySelector(
+          '[data-role="placeholder"]'
+        );
+        const deleteButton = article.querySelector('[data-role="delete"]');
+
+        if (titleEl) {
+          titleEl.textContent = item.title ?? "Produto sem título";
+        }
+        if (priceEl) {
+          priceEl.textContent = item.price
+            ? `Preço: ${item.price}`
+            : "Preço não disponível";
+        }
+        if (linkEl) {
+          linkEl.href = buildTrackedUrl(item.url);
+        }
+
+        if (item.image && imageEl) {
+          imageEl.src = item.image;
+          imageEl.alt = item.title
+            ? `Imagem de ${item.title}`
+            : "Imagem do presente";
+          imageEl.classList.remove("hidden");
+          if (placeholderEl) {
+            placeholderEl.classList.add("hidden");
+          }
+        } else if (placeholderEl) {
+          placeholderEl.classList.remove("hidden");
+        }
+
+        if (deleteButton) {
+          deleteButton.addEventListener("click", () => {
+            if (item.id) {
+              deleteGift(item.id);
+            }
+          });
+        }
+
+        list.appendChild(fragment);
+      });
+    };
+
+    const setSubmitting = (submitting) => {
+      if (!submitButton) return;
+      submitButton.disabled = submitting;
+      submitButton.textContent = submitting
+        ? "adicionando..."
+        : "adicionar na lista";
+    };
+
+    const persistGift = async (payload) => {
+      const response = await fetch("/api/presentes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Não foi possível salvar o presente.");
+      }
+
+      return data.present;
+    };
+
+    async function deleteGift(presentId) {
+      if (!presentId) return;
+      try {
+        const response = await fetch(`/api/presentes/${presentId}`, {
+          method: "DELETE",
+        });
+        const data = await response.json();
+
+        if (!response.ok || !data?.ok) {
+          throw new Error(
+            data?.error || "Não foi possível remover o presente."
+          );
+        }
+
+        items = items.filter((item) => item.id !== presentId);
+        renderList();
+        updateCounter();
+        setFeedback("Presente removido da lista.", "info");
+      } catch (error) {
+        console.error(error);
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Ocorreu um erro inesperado ao remover.";
+        setFeedback(message, "error");
+      }
+    }
+
+    const onSubmit = async (event) => {
+      event.preventDefault();
+      if (!form || !input) return;
+
+      const productUrl = input.value.trim();
+      if (!productUrl) {
+        setFeedback("Informe uma URL antes de adicionar.", "warning");
+        return;
+      }
+
+      const typedUrlNormalized = normalizeUrl(productUrl);
+
+      if (items.some((item) => item.url === typedUrlNormalized)) {
+        setFeedback("Esse presente já está na sua lista.", "warning");
+        return;
+      }
+
+      setSubmitting(true);
+      setFeedback("Buscando informações do presente…", "info");
+
+      try {
+        const response = await fetch("/api/presentes/metadata", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ url: productUrl }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data?.ok) {
+          throw new Error(
+            data?.error || "Não foi possível buscar as informações."
+          );
+        }
+
+        const product = data.product;
+        if (!product) {
+          throw new Error("Resposta inválida do servidor.");
+        }
+
+        const productNormalizedUrl = normalizeUrl(product.url);
+
+        if (items.some((gift) => gift.url === productNormalizedUrl)) {
+          setFeedback("Esse presente já está na sua lista.", "warning");
+          return;
+        }
+
+        const savedGift = await persistGift({
+          title: product.title ?? "Produto sem título",
+          price: product.price ?? null,
+          image: product.image ?? null,
+          source: productNormalizedUrl || typedUrlNormalized || productUrl,
+        });
+
+        items = [savedGift, ...items];
+        renderList();
+        updateCounter();
+        setFeedback("Presente adicionado com sucesso!", "success");
+        form.reset();
+        input.focus();
+      } catch (error) {
+        console.error(error);
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Ocorreu um erro inesperado.";
+        setFeedback(message, "error");
+      } finally {
+        setSubmitting(false);
+      }
+    };
+
+    form?.addEventListener("submit", onSubmit);
+    renderList();
+    updateCounter();
+  </script>
+</Layout>
