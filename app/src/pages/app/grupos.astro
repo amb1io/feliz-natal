@@ -1,0 +1,251 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import AppHeader from "../../components/AppHeader.astro";
+import Footer from "../../components/Footer.astro";
+
+export const prerender = false;
+
+const session = Astro.cookies.get("felizNatalSession");
+if (!session) {
+  return Astro.redirect("/app/");
+}
+
+const env =
+  Astro.locals.cloudflare?.env ??
+  Astro.locals.runtime?.env ??
+  Astro.locals?.env;
+const PAGE_SIZE = 10;
+const requestedPage = Number.parseInt(
+  Astro.url.searchParams.get("page") ?? "1",
+  10
+);
+
+let currentPage =
+  Number.isFinite(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+let totalGrupos = 0;
+let totalPaginas = 1;
+
+let grupos: Array<{
+  id: string;
+  slug: string;
+  titulo: string;
+  descricao: string | null;
+  status: string;
+  criado_em: string | null;
+}> = [];
+
+if (env?.DB) {
+  try {
+    const totalResult = await env.DB.prepare(
+      `SELECT COUNT(DISTINCT g.id) as total
+			 FROM grupo g
+			 LEFT JOIN grupo_participante gp
+			   ON gp.grupo_id = g.id
+			  AND gp.usuario_id = ?
+			  AND gp.is_ativo = 1
+			 WHERE g.criado_por = ? OR gp.usuario_id IS NOT NULL`
+    )
+      .bind(session.value, session.value)
+      .all();
+
+    totalGrupos = Number(totalResult?.results?.[0]?.total ?? 0);
+    totalPaginas = Math.max(1, Math.ceil(totalGrupos / PAGE_SIZE));
+    currentPage = Math.min(currentPage, totalPaginas);
+
+    const offset = (currentPage - 1) * PAGE_SIZE;
+    const listResult = await env.DB.prepare(
+      `SELECT DISTINCT g.id, g.slug, g.titulo, g.descricao, g.status, g.criado_em
+			 FROM grupo g
+			 LEFT JOIN grupo_participante gp
+			   ON gp.grupo_id = g.id
+			  AND gp.usuario_id = ?
+			  AND gp.is_ativo = 1
+			 WHERE g.criado_por = ? OR gp.usuario_id IS NOT NULL
+			 ORDER BY datetime(coalesce(g.criado_em, '1970-01-01')) DESC
+			 LIMIT ? OFFSET ?`
+    )
+      .bind(session.value, session.value, PAGE_SIZE, offset)
+      .all();
+
+    grupos = (listResult?.results ?? []) as typeof grupos;
+  } catch (error) {
+    console.error("Erro ao carregar grupos do usuário:", error);
+  }
+}
+
+currentPage = Math.max(1, Math.min(currentPage, totalPaginas));
+
+const hasPrevious = currentPage > 1;
+const hasNext = currentPage < totalPaginas;
+const previousPage = Math.max(1, currentPage - 1);
+const nextPage = currentPage + 1;
+
+const formatDate = (value?: string | null) =>
+  value
+    ? new Date(value).toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    : "Data desconhecida";
+---
+
+<Layout>
+  <div class="min-h-screen bg-transparent flex flex-col">
+    <AppHeader />
+
+    <main class="flex-1 mx-auto max-w-6xl space-y-10 px-6 py-12">
+      <header class="space-y-3 text-center">
+        <h1 class="text-3xl font-semibold text-[var(--color-text)]">
+          Todos os grupos
+        </h1>
+        <p class="text-sm text-[var(--color-text-muted)]">
+          Explore os grupos atuais da plataforma e gerencie cada um deles.
+        </p>
+      </header>
+
+      <section class="space-y-6">
+        <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {
+            grupos.length ? (
+              grupos.map((grupo) => (
+                <article class="flex h-full flex-col justify-between rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-6 shadow-[0_12px_24px_rgba(109,76,65,0.12)]">
+                  <header class="space-y-1">
+                    <h2 class="text-lg font-semibold text-[var(--color-text)]">
+                      {grupo.titulo}
+                    </h2>
+                    <span class="inline-flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-[var(--color-text-muted)]">
+                      Status:{" "}
+                      <span class="font-semibold text-[var(--color-primary)]">
+                        {grupo.status}
+                      </span>
+                    </span>
+                  </header>
+                  {grupo.descricao && (
+                    <p class="mt-4 text-sm text-[var(--color-text-muted)]">
+                      {grupo.descricao}
+                    </p>
+                  )}
+                  <footer class="mt-6 flex items-center justify-between text-xs text-[var(--color-text-muted)]">
+                    <span>Criado em {formatDate(grupo.criado_em)}</span>
+                    <a
+                      href={`/app/grupo/${grupo.slug}`}
+                      class="inline-flex items-center gap-1 font-semibold text-[var(--color-primary)] hover:underline"
+                    >
+                      Detalhes
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        class="h-4 w-4"
+                      >
+                        <path
+                          fill-rule="evenodd"
+                          d="M3 10a.75.75 0 0 1 .75-.75h9.19l-2.47-2.47a.75.75 0 0 1 1.06-1.06l3.75 3.75a.75.75 0 0 1 0 1.06l-3.75 3.75a.75.75 0 1 1-1.06-1.06l2.47-2.47H3.75A.75.75 0 0 1 3 10Z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                    </a>
+                  </footer>
+                </article>
+              ))
+            ) : (
+              <div class="col-span-full rounded-3xl border border-dashed border-[var(--color-border)] bg-[rgba(42,157,143,0.05)] px-6 py-10 text-center text-sm text-[var(--color-text-muted)]">
+                Nenhum grupo encontrado. Clique em "Criar Grupo" para começar.
+              </div>
+            )
+          }
+        </div>
+
+        <nav
+          class="flex flex-col gap-3 border-t border-[var(--color-border)] pt-4 text-sm text-[var(--color-text-muted)] md:flex-row md:items-center md:justify-between"
+        >
+          <span>
+            Mostrando página {currentPage} de {totalPaginas} ({totalGrupos} grupos)
+          </span>
+          <div class="flex items-center gap-2">
+            {
+              hasPrevious ? (
+                <a
+                  href={`/app/grupos?page=${previousPage}`}
+                  class="scroll-fade inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] px-4 py-2 font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    class="h-4 w-4"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M12.78 4.22a.75.75 0 0 1 0 1.06L8.06 10l4.72 4.72a.75.75 0 0 1-1.06 1.06l-5.25-5.25a.75.75 0 0 1 0-1.06l5.25-5.25a.75.75 0 0 1 1.06 0Z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                  Anterior
+                </a>
+              ) : (
+                <span class="inline-flex items-center gap-2 rounded-full border border-dashed border-[var(--color-border)] px-4 py-2 text-[var(--color-text-muted)] opacity-50">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    class="h-4 w-4"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M12.78 4.22a.75.75 0 0 1 0 1.06L8.06 10l4.72 4.72a.75.75 0 0 1-1.06 1.06l-5.25-5.25a.75.75 0 0 1 0-1.06l5.25-5.25a.75.75 0 0 1 1.06 0Z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                  Anterior
+                </span>
+              )
+            }
+
+            {
+              hasNext ? (
+                <a
+                  href={`/app/grupos?page=${nextPage}`}
+                  class="scroll-fade inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] px-4 py-2 font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                >
+                  Próxima
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    class="h-4 w-4"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M7.22 4.22a.75.75 0 0 1 1.06 0l5.25 5.25a.75.75 0 0 1 0 1.06l-5.25 5.25a.75.75 0 1 1-1.06-1.06L11.94 10 7.22 5.28a.75.75 0 0 1 0-1.06Z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </a>
+              ) : (
+                <span class="inline-flex items-center gap-2 rounded-full border border-dashed border-[var(--color-border)] px-4 py-2 text-[var(--color-text-muted)] opacity-50">
+                  Próxima
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    class="h-4 w-4"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M7.22 4.22a.75.75 0 0 1 1.06 0l5.25 5.25a.75.75 0 0 1 0 1.06l-5.25 5.25a.75.75 0 1 1-1.06-1.06L11.94 10 7.22 5.28a.75.75 0 0 1 0-1.06Z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </span>
+              )
+            }
+          </div>
+        </nav>
+      </section>
+    </main>
+
+    <Footer />
+  </div>
+</Layout>

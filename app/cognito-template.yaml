@@ -1,0 +1,270 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "AWS Cognito User Pool with Google and Microsoft Social Identity Providers"
+
+Parameters:
+  UserPoolName:
+    Type: String
+    Default: feliz-natal-user-pool
+    Description: Name of the Cognito User Pool
+
+  GoogleClientId:
+    Type: String
+    Default: "YOUR_GOOGLE_CLIENT_ID"
+    Description: Google OAuth Client ID
+
+  GoogleClientSecret:
+    Type: String
+    NoEcho: true
+    Default: "YOUR_GOOGLE_CLIENT_SECRET"
+    Description: Google OAuth Client Secret
+
+  MicrosoftClientId:
+    Type: String
+    Default: "YOUR_MICROSOFT_CLIENT_ID"
+    Description: Microsoft Entra ID (Azure AD) Application (client) ID
+
+  MicrosoftClientSecret:
+    Type: String
+    NoEcho: true
+    Default: "YOUR_MICROSOFT_CLIENT_SECRET"
+    Description: Microsoft Entra ID (Azure AD) client secret
+
+  MicrosoftTenantId:
+    Type: String
+    Default: "common"
+    Description: Microsoft Entra tenant ID (use 'common' for multi-tenant apps)
+
+  SlackClientId:
+    Type: String
+    Default: "YOUR_SLACK_CLIENT_ID"
+    Description: Slack App Client ID
+
+  SlackClientSecret:
+    Type: String
+    NoEcho: true
+    Default: "YOUR_SLACK_CLIENT_SECRET"
+    Description: Slack App Client Secret
+
+  CallbackURLs:
+    Type: CommaDelimitedList
+    Default: "http://localhost:4321/auth/callback,http://localhost:8788/auth/callback,https://feliz.natal.br/auth/callback"
+    Description: Comma-separated list of callback URLs
+
+  LogoutURLs:
+    Type: CommaDelimitedList
+    Default: "http://localhost:4321,http://localhost:8788,https://yourdomain.com"
+    Description: Comma-separated list of logout URLs
+
+Resources:
+  # Cognito User Pool
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Ref UserPoolName
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: name
+          AttributeDataType: String
+          Required: false
+          Mutable: true
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      UserPoolAddOns:
+        AdvancedSecurityMode: ENFORCED
+      MfaConfiguration: OPTIONAL
+      EnabledMfas:
+        - SOFTWARE_TOKEN_MFA
+
+  # User Pool Domain
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub "${UserPoolName}-${AWS::AccountId}"
+      UserPoolId: !Ref UserPool
+
+  # Google Identity Provider
+  GoogleIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Properties:
+      UserPoolId: !Ref UserPool
+      ProviderName: Google
+      ProviderType: Google
+      ProviderDetails:
+        client_id: !Ref GoogleClientId
+        client_secret: !Ref GoogleClientSecret
+        authorize_scopes: "profile email openid"
+      AttributeMapping:
+        email: email
+        name: name
+        username: sub
+        picture: picture
+
+  # Microsoft Identity Provider
+  MicrosoftIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Properties:
+      UserPoolId: !Ref UserPool
+      ProviderName: Microsoft
+      ProviderType: OIDC
+      ProviderDetails:
+        client_id: !Ref MicrosoftClientId
+        client_secret: !Ref MicrosoftClientSecret
+        authorize_scopes: "openid profile email"
+        attributes_request_method: "GET"
+        oidc_issuer: !Sub "https://login.microsoftonline.com/${MicrosoftTenantId}/v2.0"
+      AttributeMapping:
+        email: email
+        name: name
+        username: sub
+        picture: picture
+
+  # Slack Identity Provider
+  SlackIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Properties:
+      UserPoolId: !Ref UserPool
+      ProviderName: Slack
+      ProviderType: OIDC
+      ProviderDetails:
+        client_id: !Ref SlackClientId
+        client_secret: !Ref SlackClientSecret
+        authorize_scopes: "openid profile email"
+        attributes_request_method: "GET"
+        oidc_issuer: "https://slack.com"
+      AttributeMapping:
+        email: email
+        name: name
+        username: sub
+
+  # App Client
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    DependsOn:
+      - GoogleIdentityProvider
+      - MicrosoftIdentityProvider
+      - SlackIdentityProvider
+    Properties:
+      ClientName: feliz-natal-app-client
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      RefreshTokenValidity: 30
+      AccessTokenValidity: 1
+      IdTokenValidity: 1
+      TokenValidityUnits:
+        AccessToken: hours
+        IdToken: hours
+        RefreshToken: days
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_PASSWORD_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+        - Google
+        - Microsoft
+        - Slack
+      CallbackURLs: !Ref CallbackURLs
+      LogoutURLs: !Ref LogoutURLs
+      AllowedOAuthFlows:
+        - code
+        - implicit
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+      AllowedOAuthFlowsUserPoolClient: true
+
+  # Identity Pool
+  IdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Sub "${UserPoolName}_identity_pool"
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+        - ClientId: !Ref UserPoolClient
+          ProviderName: !GetAtt UserPool.ProviderName
+
+  # IAM Roles for Identity Pool
+  CognitoAuthorizedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals:
+                "cognito-identity.amazonaws.com:aud": !Ref IdentityPool
+              "ForAnyValue:StringLike":
+                "cognito-identity.amazonaws.com:amr": authenticated
+      Policies:
+        - PolicyName: CognitoAuthorizedPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "mobileanalytics:PutEvents"
+                  - "cognito-sync:*"
+                  - "cognito-identity:*"
+                Resource: "*"
+
+  # Identity Pool Role Attachment
+  IdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles:
+        authenticated: !GetAtt CognitoAuthorizedRole.Arn
+
+Outputs:
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref UserPool
+    Export:
+      Name: !Sub "${AWS::StackName}-UserPoolId"
+
+  UserPoolArn:
+    Description: Cognito User Pool ARN
+    Value: !GetAtt UserPool.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-UserPoolArn"
+
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref UserPoolClient
+    Export:
+      Name: !Sub "${AWS::StackName}-UserPoolClientId"
+
+  IdentityPoolId:
+    Description: Cognito Identity Pool ID
+    Value: !Ref IdentityPool
+    Export:
+      Name: !Sub "${AWS::StackName}-IdentityPoolId"
+
+  HostedUIURL:
+    Description: Cognito Hosted UI URL
+    Value: !Sub "https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com/login?client_id=${UserPoolClient}&response_type=code&redirect_uri=YOUR_CALLBACK_URL"
+
+  UserPoolDomain:
+    Description: Cognito User Pool Domain
+    Value: !Ref UserPoolDomain

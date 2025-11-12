@@ -1,0 +1,11 @@
+---
+export const prerender = false;
+
+const session = Astro.cookies.get('felizNatalSession');
+
+if (!session) {
+	return Astro.redirect('/app/');
+}
+
+return Astro.redirect('/app/painel');
+---
