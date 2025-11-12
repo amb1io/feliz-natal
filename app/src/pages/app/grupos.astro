@@ -88,6 +88,23 @@ const formatDate = (value?: string | null) =>
         year: "numeric",
       })
     : "Data desconhecida";
+
+const staticAppRoutes = [
+  "/app/",
+  "/app/grupos",
+  "/app/grupo-novo",
+  "/app/painel",
+  "/app/presentes",
+];
+
+const precacheTargets = Array.from(
+  new Set([
+    ...staticAppRoutes,
+    ...grupos.map((grupo) => `/app/grupo/${grupo.slug}`),
+  ])
+);
+
+const serializedPrecacheTargets = JSON.stringify(precacheTargets);
 ---
 
 <Layout>
@@ -249,3 +266,18 @@ const formatDate = (value?: string | null) =>
     <Footer />
   </div>
 </Layout>
+
+<script is:inline>
+  window.addEventListener(
+    "load",
+    () => {
+      try {
+        const routes = {serializedPrecacheTargets};
+        window.__FelizNatalPrecache?.(routes);
+      } catch (error) {
+        console.warn("Não foi possível enviar rotas para pré-cache:", error);
+      }
+    },
+    { once: true }
+  );
+</script>
