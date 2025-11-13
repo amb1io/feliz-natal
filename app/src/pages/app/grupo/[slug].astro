@@ -8,9 +8,16 @@ import { computeInitials, renderMessageList } from '../../../utils/message-rende
 import { sendDrawCompletedEmail, sendInviteEmail } from '../../../../../shared/utils/email';
 import { notifyDrawCompletedByPhone, notifyInviteByPhone } from '../../../../../shared/utils/twilio';
 
+type FelizNatalEnv = {
+	DB: D1Database;
+	WEBSOCKET_WORKER_URL?: string;
+};
+
 export const prerender = false;
 
-const env = Astro.locals.cloudflare?.env ?? Astro.locals.runtime?.env ?? Astro.locals?.env;
+const env = (Astro.locals.cloudflare?.env ?? Astro.locals.runtime?.env ?? Astro.locals?.env) as
+	| FelizNatalEnv
+	| undefined;
 const sessionCookie = Astro.cookies.get('felizNatalSession');
 const slug = Astro.params.slug;
 
@@ -87,6 +94,21 @@ if (!isParticipant) {
 
 const canEdit = isOrganizer;
 const groupId = (grupoRow as { id: string }).id;
+
+const viewerRecord = await env.DB.prepare(
+	`SELECT nome, email
+	 FROM usuario
+	 WHERE id = ?
+	 LIMIT 1`
+)
+	.bind(userId)
+	.first();
+
+const viewerDisplayName =
+	(viewerRecord as { nome?: string | null; email?: string | null })?.nome ??
+	(viewerRecord as { email?: string | null })?.email ??
+	'Participante';
+const viewerInitials = computeInitials(viewerDisplayName);
 
 let submissionError: string | null = null;
 let draftMessage = '';
@@ -995,6 +1017,12 @@ const secretModalForcedOpen =
 	secretMessagingAvailable &&
 	(Astro.url.searchParams.get('openSecret') ?? '').toLowerCase() === '1';
 
+const websocketWorkerBase =
+	typeof env?.WEBSOCKET_WORKER_URL === 'string' ? env.WEBSOCKET_WORKER_URL.trim() : '';
+const chatEndpoint =
+	websocketWorkerBase && slug ? `${websocketWorkerBase.replace(/\/$/, '')}/${slug}` : null;
+const chatEnabled = Boolean(chatEndpoint);
+
 let secretMessageHistory =
 	secretMessagingAvailable && secretRecipientId
 		? (
@@ -1435,16 +1463,23 @@ window.participantModal = function participantModal() {
 
 		<section class="space-y-4">
 			<h2 class="text-xl font-semibold text-[var(--color-text)]">Mensagens</h2>
-			<div class="space-y-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-6 shadow-[0_12px_24px_rgba(109,76,65,0.12)]">
+			<div
+				class="space-y-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-6 shadow-[0_12px_24px_rgba(109,76,65,0.12)]"
+				data-chat-room={chatEnabled ? 'true' : undefined}
+				data-chat-endpoint={chatEnabled ? chatEndpoint ?? undefined : undefined}
+				data-viewer-id={chatEnabled ? userId : undefined}
+				data-group-id={chatEnabled ? groupId : undefined}
+				data-viewer-initials={chatEnabled ? viewerInitials : undefined}
+			>
 				<p class="text-sm text-[var(--color-text-muted)]">Interaja aqui com os outros membros do grupo</p>
-				<div class="space-y-3 max-h-64 overflow-y-auto pr-1">
+				<div class="space-y-3 max-h-64 overflow-y-auto pr-1" data-chat-log>
 					{messageHistory.length ? (
 						<Fragment set:html={renderMessageList(messageHistory, userId)} />
 					) : (
 						<p class="text-sm text-[var(--color-text-muted)]">Ainda não há mensagens. Envie a primeira!</p>
 					)}
 				</div>
-				<form method="post" class="flex flex-col gap-3 pt-2 sm:flex-row" novalidate>
+				<form method="post" class="flex flex-col gap-3 pt-2 sm:flex-row" novalidate data-chat-form>
 					<input type="hidden" name="intent" value="message" />
 					<label class="sr-only" for={`message-input-${groupId}`}>Mensagem</label>
 					<input
@@ -1454,6 +1489,7 @@ window.participantModal = function participantModal() {
 						autocomplete="off"
 						required
 						value={draftMessage}
+						data-chat-input
 						class="flex-1 rounded-full border border-[var(--color-border)] bg-[rgba(255,209,102,0.25)] px-4 py-2 text-sm text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
 						placeholder="Escreva uma mensagem..."
 					/>
@@ -1466,6 +1502,12 @@ window.participantModal = function participantModal() {
 				</form>
 				{submissionError && (
 					<p class="text-xs font-semibold text-red-500">{submissionError}</p>
+				)}
+				<p class="text-xs font-semibold text-red-500 hidden" data-chat-error></p>
+				{!chatEnabled && (
+					<p class="text-xs text-[var(--color-text-muted)]">
+						Configuração de websocket ausente. Defina <code>WEBSOCKET_WORKER_URL</code> para ativar o chat em tempo real.
+					</p>
 				)}
 			</div>
 		</section>
@@ -1571,6 +1613,7 @@ window.participantModal = function participantModal() {
 		</div>
 	</div>
 
+	{chatEnabled && <script src="/scripts/chat-room.js" defer></script>}
 	<script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js" defer></script>
 
 	<script is:inline>
