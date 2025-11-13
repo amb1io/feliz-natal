@@ -33,7 +33,7 @@ const renderMessageBubble = (message, viewerId) => {
 const SELECTOR = '[data-chat-room]';
 
 const toWebsocketUrl = (endpoint) => {
-	const url = new URL(endpoint, window.location.href);
+	const url = endpoint instanceof URL ? endpoint : new URL(endpoint, window.location.href);
 	url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
 	return url.toString();
 };
@@ -51,12 +51,14 @@ const appendMessage = (container, viewerId, message) => {
 const setupChatRoom = (root) => {
 	const endpoint = root.dataset.chatEndpoint;
 	const viewerId = root.dataset.viewerId ?? '';
+	const groupId = root.dataset.groupId ?? '';
+	const viewerInitials = root.dataset.viewerInitials ?? '??';
 	const messagesContainer = root.querySelector('[data-chat-log]');
 	const form = root.querySelector('[data-chat-form]');
 	const input = root.querySelector('[data-chat-input]');
 	const feedback = root.querySelector('[data-chat-error]');
 
-	if (!endpoint || !viewerId || !messagesContainer || !form || !input) {
+	if (!endpoint || !viewerId || !groupId || !messagesContainer || !form || !input) {
 		return;
 	}
 
@@ -75,6 +77,16 @@ const setupChatRoom = (root) => {
 		}
 	};
 
+	const buildSocketUrl = () => {
+		const target = new URL(endpoint, window.location.href);
+		target.searchParams.set('userId', viewerId);
+		target.searchParams.set('groupId', groupId);
+		if (viewerInitials) {
+			target.searchParams.set('initials', viewerInitials);
+		}
+		return toWebsocketUrl(target);
+	};
+
 	const connect = () => {
 		if (socket) {
 			socket.removeEventListener('close', handleClose);
@@ -83,8 +95,7 @@ const setupChatRoom = (root) => {
 		}
 
 		setFeedback('Conectando ao chat...');
-		const url = toWebsocketUrl(endpoint);
-		socket = new WebSocket(url);
+		socket = new WebSocket(buildSocketUrl());
 
 		socket.addEventListener('open', () => {
 			setFeedback('');
