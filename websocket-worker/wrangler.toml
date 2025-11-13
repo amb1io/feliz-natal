@@ -8,7 +8,7 @@ class_name = "WebsocketRoomDurableObject"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["WebsocketRoomDurableObject"]
+new_sqlite_classes = ["WebsocketRoomDurableObject"]
 
 [[d1_databases]]
 binding = "DB"
