@@ -1,4 +1,4 @@
-name = "websocket-worker"
+name = "feliz-natal-websocket"
 main = "src/index.ts"
 compatibility_date = "2024-07-01"
 
