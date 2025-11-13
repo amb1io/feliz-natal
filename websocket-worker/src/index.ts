@@ -1,8 +1,17 @@
+import type { DurableObjectState } from '@cloudflare/workers-types';
+
 interface Env {
   WEBSOCKET_ROOM: DurableObjectNamespace;
+  DB: D1Database;
 }
 
-type Session = {
+type SessionMetadata = {
+  userId: string;
+  groupId: string;
+  initials: string;
+};
+
+type Session = SessionMetadata & {
   webSocket: WebSocket;
   id: string;
 };
@@ -36,10 +45,17 @@ export class WebsocketRoomDurableObject {
       return new Response('Expected WebSocket request.', { status: 426 });
     }
 
+    const url = new URL(request.url);
+    const metadata = extractSessionMetadata(url);
+
+    if (!metadata) {
+      return new Response('Missing required session metadata.', { status: 400 });
+    }
+
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];
-    this.handleSession(server).catch((error) => {
+    this.handleSession(server, metadata).catch((error) => {
       console.error('WebSocket session failed', error);
       server.close(1011, 'Internal Error');
     });
@@ -47,9 +63,9 @@ export class WebsocketRoomDurableObject {
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  private async handleSession(webSocket: WebSocket) {
+  private async handleSession(webSocket: WebSocket, metadata: SessionMetadata) {
     webSocket.accept();
-    const session: Session = { webSocket, id: crypto.randomUUID() };
+    const session: Session = { webSocket, id: crypto.randomUUID(), ...metadata };
     this.sessions.push(session);
 
     webSocket.addEventListener('message', (event) => this.onMessage(event, session));
@@ -59,53 +75,61 @@ export class WebsocketRoomDurableObject {
     webSocket.send(JSON.stringify({ type: 'system', message: 'connected', id: session.id }));
   }
 
-  private onMessage(event: MessageEvent, session: Session) {
-    let data: unknown = event.data;
+  private async onMessage(event: MessageEvent, session: Session) {
+    const data = parseIncomingPayload(event.data);
 
-    if (typeof data === 'string') {
-      try {
-        data = JSON.parse(data);
-      } catch {
-        // treat as raw text message
-        data = { type: 'message', payload: { text: event.data } };
-      }
-    }
-
-    if (!isPayload(data)) {
-      session.webSocket.send(JSON.stringify({ type: 'error', message: 'Unsupported payload.' }));
+    if (!data) {
+      this.safeSend(session.webSocket, JSON.stringify({ type: 'error', message: 'Unsupported payload.' }));
       return;
     }
 
     if (data.type === 'ping') {
-      session.webSocket.send(JSON.stringify({ type: 'pong', ts: Date.now() }));
+      this.safeSend(session.webSocket, JSON.stringify({ type: 'pong', ts: Date.now() }));
       return;
     }
 
     if (data.type === 'message') {
-      const enriched = {
+      const body = (data.body ?? '').trim();
+      if (!body) {
+        this.safeSend(session.webSocket, JSON.stringify({ type: 'error', message: 'Digite algo antes de enviar.' }));
+        return;
+      }
+
+      const messageId = crypto.randomUUID();
+
+      try {
+        await this.env.DB.prepare(
+          `INSERT INTO mensagem (id, grupo_id, remetente_id, body)
+           VALUES (?, ?, ?, ?)`
+        )
+          .bind(messageId, session.groupId, session.userId, body)
+          .run();
+      } catch (error) {
+        console.error('Failed to persist message', error);
+        this.safeSend(session.webSocket, JSON.stringify({ type: 'error', message: 'Não foi possível enviar agora.' }));
+        return;
+      }
+
+      const broadcastPayload: BroadcastMessage = {
         type: 'message',
         payload: {
-          text: data.payload?.text ?? '',
-          sender: data.payload?.sender ?? session.id,
-          ts: Date.now(),
+          id: messageId,
+          body,
+          authorId: session.userId,
+          initials: session.initials || '??',
         },
       };
-      this.broadcast(enriched, session);
+
+      this.broadcast(broadcastPayload);
     }
   }
 
-  private broadcast(message: BroadcastMessage, sender: Session) {
+  private broadcast(message: BroadcastMessage) {
     const payload = JSON.stringify(message);
     this.cleanupSessions();
 
     for (const session of this.sessions) {
-      if (session === sender) continue;
-      try {
-        session.webSocket.send(payload);
-      } catch (error) {
-        console.error('Failed to send message', error);
-        this.closeSession(session, 'send-error');
-      }
+      this.safeSend(session.webSocket, payload);
     }
   }
 
@@ -123,31 +147,61 @@ export class WebsocketRoomDurableObject {
   private cleanupSessions() {
     this.sessions = this.sessions.filter((session) => session.webSocket.readyState === 1);
   }
+
+  private safeSend(socket: WebSocket, data: string) {
+    try {
+      socket.send(data);
+    } catch (error) {
+      console.error('Failed to send WebSocket payload', error);
+    }
+  }
 }
 
 type BroadcastMessage = {
   type: 'message';
   payload: {
-    text: string;
-    sender: string;
-    ts: number;
+    id: string;
+    body: string;
+    authorId: string;
+    initials: string;
   };
 };
 
-type Payload =
+type IncomingPayload =
   | { type: 'ping' }
   | {
       type: 'message';
-      payload?: {
-        text?: string;
-        sender?: string;
-      };
+      body?: string;
     };
 
-function isPayload(data: unknown): data is Payload {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
-  const payload = data as Record<string, unknown>;
-  if (payload.type === 'ping') return true;
-  if (payload.type === 'message') return true;
-  return false;
+function parseIncomingPayload(raw: unknown): IncomingPayload | null {
+  if (typeof raw !== 'string') return null;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const type = parsed.type;
+    if (type === 'ping') return { type: 'ping' };
+    if (type === 'message') {
+      const body = typeof parsed.body === 'string' ? parsed.body : parsed.body?.toString();
+      return { type: 'message', body };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function extractSessionMetadata(url: URL): SessionMetadata | null {
+  const userId = url.searchParams.get('userId')?.trim() ?? '';
+  const groupId = url.searchParams.get('groupId')?.trim() ?? '';
+  const initials = url.searchParams.get('initials')?.trim() ?? '';
+
+  if (!userId || !groupId) {
+    return null;
+  }
+
+  return {
+    userId,
+    groupId,
+    initials: initials || '??',
+  };
 }
