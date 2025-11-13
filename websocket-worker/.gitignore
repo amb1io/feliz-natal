@@ -1,0 +1,7 @@
+/node_modules
+/.wrangler
+/dist
+/worker
+.wrangler
+wrangler.log
+package-lock.json
