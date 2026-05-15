@@ -1,8 +1,18 @@
-type ResendEnv = {
-  RESEND_API?: string;
-  RESEND_API_KEY?: string;
-  RESEND_FROM_EMAIL?: string;
-  RESEND_FROM_NAME?: string;
+import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
+import addedToGroupTemplate from "../../templates/email-added-to-group.html?raw";
+import drawCompletedTemplate from "../../templates/email-draw-completed.html?raw";
+import groupCreatedTemplate from "../../templates/email-group-created.html?raw";
+import inviteTemplate from "../../templates/email-invite.html?raw";
+import welcomeTemplate from "../../templates/email-welcome.html?raw";
+
+type EmailEnv = {
+  SES_REGION?: string;
+  AWS_REGION?: string;
+  SES_FROM_EMAIL?: string;
+  SES_FROM_NAME?: string;
+  AWS_SES_ACCESS_KEY_ID?: string;
+  AWS_SES_SECRET_ACCESS_KEY?: string;
+  AWS_SESSION_TOKEN?: string;
 };
 
 type SendEmailOptions = {
@@ -31,19 +41,36 @@ type InviteEmailOptions = {
   groupTitle: string;
   inviteLink: string;
   inviterName?: string | null;
+  groupOwner?: string | null;
 };
 
-const RESEND_ENDPOINT = "https://api.resend.com/emails";
-const DEFAULT_FROM_EMAIL = "onboarding@resend.dev";
+type GroupCreatedEmailOptions = {
+  to: string;
+  groupTitle: string;
+  groupUrl: string;
+  ownerName?: string | null;
+};
+
+type AddedToGroupEmailOptions = {
+  to: string;
+  groupTitle: string;
+  groupUrl: string;
+  inviteLink?: string | null;
+  participantName?: string | null;
+  groupOwner?: string | null;
+};
+
+const DEFAULT_FROM_EMAIL = "no-reply@feliz.natal.br";
 const DEFAULT_FROM_NAME = "Feliz Natal";
+const DEFAULT_AWS_REGION = "sa-east-1";
 
 const readEnvValue = (
-  env: ResendEnv | null | undefined,
+  env: EmailEnv | null | undefined,
   keys: string[],
   fallbackEnvKeys: string[] = []
 ) => {
   for (const key of keys) {
-    const value = env?.[key as keyof ResendEnv];
+    const value = env?.[key as keyof EmailEnv];
     if (value) return value;
   }
 
@@ -72,13 +99,6 @@ const readEnvValue = (
   return null;
 };
 
-const getApiKey = (env: ResendEnv | null | undefined) =>
-  readEnvValue(
-    env,
-    ["RESEND_API", "RESEND_API_KEY"],
-    ["RESEND_API", "RESEND_API_KEY"]
-  );
-
 const isValidEmailAddress = (value: string) => {
   const candidate = value.trim();
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(candidate);
@@ -98,124 +118,113 @@ const formatRecipientAddress = (email: string, name?: string | null) => {
   return safeName.length ? `${safeName} <${address}>` : address;
 };
 
-const getDefaultFrom = (env: ResendEnv | null | undefined) => {
-  const fromValue = readEnvValue(
-    env,
-    ["RESEND_FROM_EMAIL"],
-    ["RESEND_FROM_EMAIL", "PUBLIC_RESEND_FROM_EMAIL"]
-  );
-  const fromNameValue = readEnvValue(
-    env,
-    ["RESEND_FROM_NAME"],
-    ["RESEND_FROM_NAME", "PUBLIC_RESEND_FROM_NAME"]
-  );
-
-  if (fromValue) {
-    const trimmed = fromValue.trim();
-    if (trimmed.includes("<") && trimmed.includes(">")) {
-      return trimmed;
-    }
-    if (isValidEmailAddress(trimmed)) {
-      const name = fromNameValue
-        ? sanitizeDisplayName(fromNameValue)
-        : DEFAULT_FROM_NAME;
-      return `${name} <${trimmed}>`;
-    }
-  }
-
-  const name = fromNameValue
-    ? sanitizeDisplayName(fromNameValue)
-    : DEFAULT_FROM_NAME;
-  return `${name} <${DEFAULT_FROM_EMAIL}>`;
+const extractEmailAddress = (value: string) => {
+  const trimmed = value.trim();
+  const match = trimmed.match(/<([^>]+)>/);
+  return (match?.[1] ?? trimmed).trim();
 };
 
-const renderEmailShell = (title: string, content: string) => `<!DOCTYPE html>
-<html lang="pt-BR">
-  <head>
-    <meta charset="utf-8">
-    <title>${title}</title>
-  </head>
-  <body style="margin:0;padding:0;background-color:#f6f7fb;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#0f172a;">
-    <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="padding:32px 0;">
-      <tr>
-        <td align="center">
-          <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;background:#ffffff;border-radius:16px;padding:32px 28px;box-shadow:0 16px 32px rgba(15,23,42,0.12);">
-            <tr>
-              <td>
-                ${content}
-              </td>
-            </tr>
-          </table>
-          <p style="font-size:12px;color:#475569;margin-top:16px;">Feliz Natal • Plataforma de Amigo Secreto</p>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
+const getDefaultFrom = (env: EmailEnv | null | undefined) => {
+  const sesFromValue = readEnvValue(
+    env,
+    ["SES_FROM_EMAIL"],
+    ["SES_FROM_EMAIL", "PUBLIC_SES_FROM_EMAIL"]
+  );
+  const sesFromNameValue = readEnvValue(
+    env,
+    ["SES_FROM_NAME"],
+    ["SES_FROM_NAME", "PUBLIC_SES_FROM_NAME"]
+  );
+  if (sesFromValue && isValidEmailAddress(sesFromValue.trim())) {
+    const name = sesFromNameValue
+      ? sanitizeDisplayName(sesFromNameValue)
+      : DEFAULT_FROM_NAME;
+    return `${name} <${sesFromValue.trim()}>`;
+  }
 
-const renderParagraph = (text: string) =>
-  `<p style="font-size:15px;line-height:1.6;margin:0 0 16px;color:#334155;">${text}</p>`;
+  return `${DEFAULT_FROM_NAME} <${DEFAULT_FROM_EMAIL}>`;
+};
 
-const renderButton = (href: string, label: string) =>
-  `<p style="margin:28px 0;"><a href="${href}" style="display:inline-block;padding:14px 28px;border-radius:999px;background:linear-gradient(135deg,#38bdf8,#2563eb);color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;">${label}</a></p>`;
+const renderTemplate = (
+  template: string,
+  variables: Record<string, string | null | undefined>
+) =>
+  Object.entries(variables).reduce((html, [key, value]) => {
+    const safeValue = value ?? "";
+    return html.replaceAll(`{{${key}}}`, safeValue);
+  }, template);
 
-const renderGreeting = (name: string | null | undefined) =>
-  `<p style="font-size:16px;line-height:1.6;margin:0 0 18px;color:#1e293b;font-weight:600;">Olá${
-    name ? ` ${name}` : ""
-  }!</p>`;
+const DEFAULT_HEADER_IMAGE_URL = "https://feliz.natal.br/og-image.png";
+
+const resolveHeaderImageUrl = (referenceUrl?: string | null) => {
+  return DEFAULT_HEADER_IMAGE_URL;
+};
 
 export const sendEmail = async (
-  env: ResendEnv | null | undefined,
+  env: EmailEnv | null | undefined,
   options: SendEmailOptions
 ) => {
-  const apiKey = getApiKey(env);
-  if (!apiKey) {
-    console.warn("Resend API key não configurada. Email não será enviado.");
+  const resolvedFrom = (options.from ?? getDefaultFrom(env)).trim();
+  const senderEmail = extractEmailAddress(resolvedFrom);
+
+  const sesRegion =
+    readEnvValue(env, ["SES_REGION", "AWS_REGION"], ["SES_REGION", "AWS_REGION"]) ??
+    DEFAULT_AWS_REGION;
+  const sesAccessKey = readEnvValue(
+    env,
+    ["AWS_SES_ACCESS_KEY_ID"],
+    ["AWS_SES_ACCESS_KEY_ID"]
+  );
+  const sesSecretKey = readEnvValue(
+    env,
+    ["AWS_SES_SECRET_ACCESS_KEY"],
+    ["AWS_SES_SECRET_ACCESS_KEY"]
+  );
+  const sesSessionToken = readEnvValue(
+    env,
+    ["AWS_SESSION_TOKEN"],
+    ["AWS_SESSION_TOKEN"]
+  );
+  if (!sesRegion || !sesAccessKey || !sesSecretKey) {
+    console.warn("Configuração do AWS SES ausente. Email não será enviado.");
     return false;
   }
 
-  const resolvedFrom = (options.from ?? getDefaultFrom(env)).trim();
-  if (
-    !isValidEmailAddress(resolvedFrom) &&
-    !(resolvedFrom.includes("<") && resolvedFrom.includes(">"))
-  ) {
+  if (!isValidEmailAddress(senderEmail)) {
     console.warn(
-      "Remetente inválido para envio via Resend. Valor recebido:",
+      "Remetente inválido para envio via SES. Valor recebido:",
       resolvedFrom
     );
     return false;
   }
 
-  const payload = {
-    from: resolvedFrom,
-    to: options.to,
-    subject: options.subject,
-    html: options.html,
-  };
-
   try {
-    const response = await fetch(RESEND_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
+    const client = new SESv2Client({
+      region: sesRegion,
+      credentials: {
+        accessKeyId: sesAccessKey,
+        secretAccessKey: sesSecretKey,
+        ...(sesSessionToken ? { sessionToken: sesSessionToken } : {})
+      }
     });
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      console.error(
-        "Falha ao enviar email via Resend:",
-        response.status,
-        errorBody
-      );
-      return false;
-    }
-
+    const command = new SendEmailCommand({
+      FromEmailAddress: senderEmail,
+      Destination: {
+        ToAddresses: [extractEmailAddress(options.to)]
+      },
+      Content: {
+        Simple: {
+          Subject: { Data: options.subject, Charset: "UTF-8" },
+          Body: {
+            Html: { Data: options.html, Charset: "UTF-8" }
+          }
+        }
+      }
+    });
+    await client.send(command);
     return true;
   } catch (error) {
-    console.error("Erro inesperado ao enviar email via Resend:", error);
+    console.error("Falha ao enviar email via AWS SES:", error);
     return false;
   }
 };
@@ -229,30 +238,19 @@ export const buildDrawCompletedEmail = ({
   const friendlyDate = revealDate
     ? new Date(revealDate).toLocaleDateString("pt-BR", { dateStyle: "long" })
     : null;
-  const content = [
-    `<h1 style="font-size:22px;margin:0 0 18px;color:#0f172a;">O sorteio do grupo <span style="color:#2563eb;">${groupTitle}</span> foi realizado!</h1>`,
-    renderGreeting(participantName),
-    renderParagraph(
-      "O seu amigo secreto já está disponível dentro da plataforma. Clique no botão abaixo para acessar o grupo, descobrir quem você tirou e começar a preparar a surpresa."
-    ),
-    friendlyDate
-      ? renderParagraph(
-          `📅 <strong>Data de revelação prevista:</strong> ${friendlyDate}`
-        )
-      : renderParagraph(
-          "📅 A data de revelação será definida em breve. Fique de olho!"
-        ),
-    renderButton(groupUrl, "Ver meu amigo secreto"),
-    renderParagraph(
-      "Experimente enviar uma mensagem para o seu amigo secreto, compartilhar ideias de presente ou combinar detalhes especiais. Divirta-se!"
-    ),
-    renderParagraph("<strong>Equipe Feliz Natal</strong>"),
-  ].join("");
-  return renderEmailShell(`Sorteio concluído no grupo ${groupTitle}`, content);
+  return renderTemplate(drawCompletedTemplate, {
+    groupTitle,
+    greetingName: participantName ? ` ${participantName}` : "",
+    dateLine: friendlyDate
+      ? `📅 <strong>Data de revelação prevista:</strong> ${friendlyDate}`
+      : "📅 A data de revelação será definida em breve. Fique de olho!",
+    groupUrl,
+    headerImageUrl: resolveHeaderImageUrl(groupUrl)
+  });
 };
 
 export const sendDrawCompletedEmail = async (
-  env: ResendEnv | null | undefined,
+  env: EmailEnv | null | undefined,
   options: DrawEmailOptions
 ) => {
   const html = buildDrawCompletedEmail(options);
@@ -267,28 +265,16 @@ export const buildWelcomeEmail = ({
   name,
   dashboardUrl,
 }: Omit<WelcomeEmailOptions, "to">) => {
-  const content = [
-    `<h1 style="font-size:24px;margin:0 0 18px;color:#0f172a;">Bem-vindo${
-      name ? `, ${name}` : ""
-    }!</h1>`,
-    renderGreeting(name),
-    renderParagraph(
-      "Estamos muito felizes em ter você com a gente. A plataforma Feliz Natal ajuda seu grupo de amigo secreto a organizar tudo com praticidade — participantes, sorteio, mensagens e muito mais."
-    ),
-    renderParagraph(
-      "Para começar, acesse o painel e confira os grupos disponíveis ou aceite convites já enviados para você."
-    ),
-    renderButton(dashboardUrl, "Ir para o painel"),
-    renderParagraph(
-      "Se precisar de ajuda, basta responder a este email. Desejamos uma experiência incrível e cheia de presentes memoráveis! 🎄"
-    ),
-    renderParagraph("<strong>Equipe Feliz Natal</strong>"),
-  ].join("");
-  return renderEmailShell("Boas-vindas ao Feliz Natal", content);
+  return renderTemplate(welcomeTemplate, {
+    headingName: name ? `, ${name}` : "",
+    greetingName: name ? ` ${name}` : "",
+    dashboardUrl,
+    headerImageUrl: resolveHeaderImageUrl(dashboardUrl)
+  });
 };
 
 export const sendWelcomeEmail = async (
-  env: ResendEnv | null | undefined,
+  env: EmailEnv | null | undefined,
   options: WelcomeEmailOptions
 ) => {
   const html = buildWelcomeEmail(options);
@@ -303,30 +289,79 @@ const buildInviteEmail = ({
   groupTitle,
   inviteLink,
   inviterName,
+  groupOwner,
 }: InviteEmailOptions) => {
-  const content = [
-    `<h1 style="font-size:24px;margin:0 0 18px;color:#0f172a;">Você foi convidado para o grupo <span style="color:#2563eb;">${groupTitle}</span></h1>`,
-    renderGreeting(inviterName ?? null),
-    renderParagraph(
-      "Alguém especial convidou você para participar de um amigo secreto no Feliz Natal. Aceite o convite para acompanhar as atualizações, enviar mensagens e participar do sorteio."
-    ),
-    renderButton(inviteLink, "Aceitar convite"),
-    renderParagraph(
-      "Se você já possui conta, basta acessar usando seu login habitual. Caso contrário, criaremos tudo para você em poucos cliques."
-    ),
-    renderParagraph("<strong>Equipe Feliz Natal</strong>"),
-  ].join("");
-  return renderEmailShell(`Convite para o grupo ${groupTitle}`, content);
+  return renderTemplate(inviteTemplate, {
+    groupTitle,
+    greetingName: inviterName ? ` ${inviterName}` : "",
+    groupOwner: groupOwner ?? inviterName ?? "Alguém",
+    inviteLink,
+    headerImageUrl: resolveHeaderImageUrl(inviteLink)
+  });
 };
 
 export const sendInviteEmail = async (
-  env: ResendEnv | null | undefined,
+  env: EmailEnv | null | undefined,
   options: InviteEmailOptions
 ) => {
   const html = buildInviteEmail(options);
   return sendEmail(env, {
     to: options.to,
     subject: `🎄 Você foi convidado para o grupo ${options.groupTitle}`,
+    html,
+  });
+};
+
+const buildGroupCreatedEmail = ({
+  groupTitle,
+  groupUrl,
+  ownerName,
+}: Omit<GroupCreatedEmailOptions, "to">) => {
+  return renderTemplate(groupCreatedTemplate, {
+    groupTitle,
+    greetingName: ownerName ? ` ${ownerName}` : "",
+    groupUrl,
+    headerImageUrl: resolveHeaderImageUrl(groupUrl)
+  });
+};
+
+export const sendGroupCreatedEmail = async (
+  env: EmailEnv | null | undefined,
+  options: GroupCreatedEmailOptions
+) => {
+  const html = buildGroupCreatedEmail(options);
+  return sendEmail(env, {
+    to: formatRecipientAddress(options.to, options.ownerName),
+    subject: `✅ Grupo ${options.groupTitle} criado com sucesso`,
+    html,
+  });
+};
+
+const buildAddedToGroupEmail = ({
+  groupTitle,
+  groupUrl,
+  inviteLink,
+  participantName,
+  groupOwner,
+}: Omit<AddedToGroupEmailOptions, "to">) => {
+  return renderTemplate(addedToGroupTemplate, {
+    groupTitle,
+    greetingName: participantName ? ` ${participantName}` : "",
+    groupOwner: groupOwner ?? "Alguém",
+    accessLink: inviteLink ?? groupUrl,
+    accessLabel: inviteLink ? "Aceitar convite" : "Ver grupo",
+    headerImageUrl: resolveHeaderImageUrl(inviteLink ?? groupUrl)
+  });
+};
+
+export const sendAddedToGroupEmail = async (
+  env: EmailEnv | null | undefined,
+  options: AddedToGroupEmailOptions
+) => {
+  const html = buildAddedToGroupEmail(options);
+  return sendEmail(env, {
+    to: formatRecipientAddress(options.to, options.participantName),
+    subject: `🎄 Você foi adicionado ao grupo ${options.groupTitle}`,
     html,
   });
 };

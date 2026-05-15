@@ -520,7 +520,8 @@ if (Astro.request.method === 'POST') {
 					to: inviteEmail,
 					groupTitle,
 					inviteLink,
-					inviterName: null
+					inviterName: null,
+					groupOwner: viewerDisplayName
 				});
 			} else if (invitePhone) {
 				await notifyInviteByPhone(env, {
