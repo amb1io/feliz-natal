@@ -8,7 +8,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "link-shared": "rm -rf shared && ln -s ../shared ./shared",
+    "link-shared": "rm -rf shared && ln -s ../app/src/shared ./shared",
     "dev": "npm run link-shared && wrangler dev --test-scheduled",
     "deploy": "npm run link-shared && wrangler deploy"
   },
