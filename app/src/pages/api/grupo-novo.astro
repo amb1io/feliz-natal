@@ -1,7 +1,10 @@
 ---
 import FormSuccess from '../../components/FormSuccess.astro';
-import { sendInviteEmail } from '../../shared/utils/email';
-import { notifyInviteByPhone } from '../../shared/utils/twilio';
+import {
+  sendAddedToGroupEmail,
+  sendGroupCreatedEmail,
+  sendInviteEmail
+} from '../../shared/utils/email';
 
 export const prerender = false;
 
@@ -44,29 +47,61 @@ const tipoPresente = formData.get('tipo_presente')?.toString() || null;
 const buildInviteLink = (token: string) =>
   new URL(`/convite?token=${encodeURIComponent(token)}`, Astro.url).toString();
 
-const sendInviteSafely = async (email: string | null, token: string, groupTitle: string) => {
+const sendInviteSafely = async (
+  email: string | null,
+  token: string,
+  groupTitle: string,
+  groupOwner: string | null
+) => {
   if (!email) return;
   try {
     await sendInviteEmail(env, {
       to: email,
       groupTitle,
       inviteLink: buildInviteLink(token),
-      inviterName: null
+      inviterName: null,
+      groupOwner
     });
   } catch (error) {
     console.error('Erro ao enviar email de convite:', error);
   }
 };
-const sendPhoneInviteSafely = async (phone: string | null, token: string, groupTitle: string) => {
-  if (!phone) return;
+const sendGroupCreatedSafely = async (
+  email: string | null,
+  ownerName: string | null,
+  groupTitle: string,
+  groupUrl: string
+) => {
+  if (!email) return;
   try {
-    await notifyInviteByPhone(env, {
-      phone,
+    await sendGroupCreatedEmail(env, {
+      to: email,
+      ownerName,
       groupTitle,
-      inviteLink: buildInviteLink(token)
+      groupUrl
     });
   } catch (error) {
-    console.error('Erro ao enviar convite por telefone:', error);
+    console.error('Erro ao enviar email de grupo criado:', error);
+  }
+};
+const sendAddedToGroupSafely = async (
+  email: string | null,
+  groupOwner: string | null,
+  groupTitle: string,
+  groupUrl: string,
+  inviteLink: string | null
+) => {
+  if (!email) return;
+  try {
+    await sendAddedToGroupEmail(env, {
+      to: email,
+      groupOwner,
+      groupTitle,
+      groupUrl,
+      inviteLink
+    });
+  } catch (error) {
+    console.error('Erro ao enviar email de adição ao grupo:', error);
   }
 };
 const orcamentoMinimo = formData.get('orcamento_minimo')?.toString();
@@ -136,6 +171,14 @@ if (!titulo || !dataSorteio) {
       } else {
         const grupoId = (grupoRegistro as { id: string }).id;
         const slugExistente = (grupoRegistro as { slug: string }).slug;
+        const organizerRow = await db
+          .prepare('SELECT nome, email FROM usuario WHERE id = ? LIMIT 1')
+          .bind(session)
+          .first();
+        const organizerName =
+          ((organizerRow as { nome?: string | null; email?: string | null } | null)?.nome ??
+            (organizerRow as { email?: string | null } | null)?.email ??
+            null) as string | null;
 
         await db
           .prepare(
@@ -330,10 +373,7 @@ if (!titulo || !dataSorteio) {
                 .run();
               conviteKeys.add(inviteKey);
               if (email) {
-                await sendInviteSafely(email, inviteToken, titulo);
-              }
-              if (telefone) {
-                await sendPhoneInviteSafely(telefone, inviteToken, titulo);
+                await sendInviteSafely(email, inviteToken, titulo, organizerName);
               }
             }
           }
@@ -406,11 +446,14 @@ if (!titulo || !dataSorteio) {
       };
 
       const slug = await resolveUniqueSlug(initialSlug);
+      const groupUrl = new URL(`/app/grupo/${slug}`, Astro.url).toString();
 
       const usuarioExistente = await db
-        .prepare('SELECT id FROM usuario WHERE id = ?')
+        .prepare('SELECT id, nome, email FROM usuario WHERE id = ?')
         .bind(session)
         .first();
+      let organizerName: string | null = null;
+      let organizerEmail: string | null = null;
 
       if (!usuarioExistente) {
         const placeholderEmail = `${session}@placeholder.local`;
@@ -421,6 +464,14 @@ if (!titulo || !dataSorteio) {
           )
           .bind(session, 'Organizador', placeholderEmail, agora)
           .run();
+      } else {
+        organizerName = ((usuarioExistente as { nome?: string | null }).nome ?? null) as string | null;
+        const candidateEmail = ((usuarioExistente as { email?: string | null }).email ?? null) as
+          | string
+          | null;
+        if (candidateEmail && !candidateEmail.endsWith('@placeholder.local')) {
+          organizerEmail = candidateEmail;
+        }
       }
 
       await db
@@ -474,10 +525,13 @@ if (!titulo || !dataSorteio) {
         `INSERT INTO convite (id, grupo_id, email, telefone, token, status, enviado_em)
          VALUES (?, ?, ?, ?, ?, ?, ?)`
       );
+      const participantEmailNotificationsSent = new Set<string>();
 
       for (const participante of participantes) {
         const email = (participante.email ?? '').toString().trim() || null;
         const telefone = (participante.telefone ?? '').toString().trim() || null;
+        const emailLower = email ? email.toLowerCase() : null;
+        let inviteLink: string | null = null;
 
         if (email) {
           const usuarioExistente = await db
@@ -498,15 +552,18 @@ if (!titulo || !dataSorteio) {
         if (email || telefone) {
           const inviteId = crypto.randomUUID();
           const inviteToken = crypto.randomUUID();
+          inviteLink = buildInviteLink(inviteToken);
           await insertConvite
             .bind(inviteId, grupoId, email, telefone, inviteToken, 'pendente', agora)
             .run();
           if (email) {
-            await sendInviteSafely(email, inviteToken, titulo);
+            await sendInviteSafely(email, inviteToken, titulo, organizerName);
           }
-          if (telefone) {
-            await sendPhoneInviteSafely(telefone, inviteToken, titulo);
-          }
+        }
+
+        if (email && emailLower && !participantEmailNotificationsSent.has(emailLower)) {
+          participantEmailNotificationsSent.add(emailLower);
+          await sendAddedToGroupSafely(email, organizerName, titulo, groupUrl, inviteLink);
         }
       }
 
@@ -516,6 +573,8 @@ if (!titulo || !dataSorteio) {
           await insertTag.bind(grupoId, tag).run();
         }
       }
+
+      await sendGroupCreatedSafely(organizerEmail, organizerName, titulo, groupUrl);
 
       successProps = {
         message: 'Grupo criado com sucesso!',

@@ -50,10 +50,6 @@ export default {
 type Env = {
   DB: D1Database;
   SITE_URL?: string;
-  RESEND_API?: string;
-  RESEND_API_KEY?: string;
-  RESEND_FROM_EMAIL?: string;
-  RESEND_FROM_NAME?: string;
   TWILIO_ACCOUNT_SID?: string;
   TWILIO_AUTH_TOKEN?: string;
   TWILIO_SMS_FROM?: string;
@@ -134,7 +130,7 @@ const runAutomaticDraw = async (env: Env, group: GroupRow) => {
         revealDate: group.data_revelacao ?? null,
         participantName: contact.nome ?? null,
       });
-      await wait(600); // throttle Resend requests (~2 per second limit)
+      await wait(600); // throttle requests to avoid provider rate limits
     }
   }
 

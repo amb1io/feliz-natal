@@ -6,7 +6,6 @@ import UpdateItem from '../../../components/UpdateItem.astro';
 import ActionButton from '../../../components/ActionButton.astro';
 import { computeInitials, renderMessageList } from '../../../utils/message-renderer';
 import { sendDrawCompletedEmail, sendInviteEmail } from '../../../shared/utils/email';
-import { notifyDrawCompletedByPhone, notifyInviteByPhone } from '../../../shared/utils/twilio';
 
 type FelizNatalEnv = {
 	DB: D1Database;
@@ -326,17 +325,6 @@ if (Astro.request.method === 'POST') {
 					const groupTitle = (grupoRow as { titulo: string }).titulo;
 					const groupSlug = (grupoRow as { slug: string }).slug;
 					const revealDateValue = (grupoRow as { data_revelacao?: string | null }).data_revelacao ?? null;
-					const revealDateText = (() => {
-						if (!revealDateValue) return null;
-						const date = new Date(revealDateValue);
-						return Number.isNaN(date.getTime())
-							? null
-							: date.toLocaleDateString('pt-BR', {
-									day: '2-digit',
-									month: 'long',
-									year: 'numeric'
-								});
-					})();
 					const groupUrl = new URL(`/app/grupo/${groupSlug}`, Astro.url).toString();
 
 					await env.DB.prepare(
@@ -353,7 +341,6 @@ if (Astro.request.method === 'POST') {
 
 					const notificationPromises: Array<Promise<void>> = [];
 					const emailPromises: Array<Promise<unknown>> = [];
-					const phoneNumbers = new Set<string>();
 					const participantContacts = new Map<
 						string,
 						{ email: string; nome?: string | null }
@@ -382,27 +369,6 @@ if (Astro.request.method === 'POST') {
 						} catch (error) {
 							console.error('Erro ao carregar emails dos participantes:', error);
 						}
-					}
-
-					try {
-						const phonesResult = await env.DB.prepare(
-							`SELECT DISTINCT telefone
-							 FROM convite
-							 WHERE grupo_id = ?
-							   AND telefone IS NOT NULL
-							   AND TRIM(telefone) != ''`
-						)
-							.bind(groupId)
-							.all();
-
-						for (const row of phonesResult?.results ?? []) {
-							const phone = (row as { telefone?: string | null }).telefone?.trim();
-							if (phone) {
-								phoneNumbers.add(phone);
-							}
-						}
-					} catch (error) {
-						console.error('Erro ao carregar telefones dos convites:', error);
 					}
 
 					for (let index = 0; index < participantIds.length; index += 1) {
@@ -439,16 +405,7 @@ if (Astro.request.method === 'POST') {
 						}
 					}
 
-					const phoneNotificationPromises = Array.from(phoneNumbers).map((phone) =>
-						notifyDrawCompletedByPhone(env, {
-							phone,
-							groupTitle,
-							groupUrl,
-							revealDate: revealDateText
-						})
-					);
-
-					await Promise.all([...notificationPromises, ...emailPromises, ...phoneNotificationPromises]);
+					await Promise.all([...notificationPromises, ...emailPromises]);
 
 					const redirectTarget = `${Astro.url.pathname}${Astro.url.search}`;
 					if (isHtmxRequest) {
@@ -507,7 +464,6 @@ if (Astro.request.method === 'POST') {
 			}
 
 			const inviteEmail = (inviteRow as { email?: string | null }).email?.trim();
-			const invitePhone = (inviteRow as { telefone?: string | null }).telefone?.trim();
 			const inviteToken = (inviteRow as { token: string }).token;
 			const groupTitle = (grupoRow as { titulo: string }).titulo;
 			const inviteLink = new URL(
@@ -520,16 +476,11 @@ if (Astro.request.method === 'POST') {
 					to: inviteEmail,
 					groupTitle,
 					inviteLink,
-					inviterName: null
-				});
-			} else if (invitePhone) {
-				await notifyInviteByPhone(env, {
-					phone: invitePhone,
-					groupTitle,
-					inviteLink
+					inviterName: null,
+					groupOwner: viewerDisplayName
 				});
 			} else {
-				return respondText('Este convite não possui contato configurado.', 400);
+				return respondText('Este convite não possui e-mail configurado.', 400);
 			}
 
 			await env.DB.prepare(`UPDATE convite SET enviado_em = ? WHERE id = ?`)
