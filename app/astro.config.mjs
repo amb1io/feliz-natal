@@ -13,7 +13,7 @@ import alpinejs from "@astrojs/alpinejs";
 import cloudflare from "@astrojs/cloudflare";
 
 // https://astro.build/config
-const sharedDir = fileURLToPath(new URL("../shared", import.meta.url));
+const sharedDir = fileURLToPath(new URL("./src/shared", import.meta.url));
 
 export default defineConfig({
   site: "https://feliz.natal.br",
