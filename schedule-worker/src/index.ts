@@ -1,5 +1,5 @@
-import { sendDrawCompletedEmail } from "../shared/utils/email";
-import { notifyDrawCompletedByPhone } from "../shared/utils/twilio";
+import { sendDrawCompletedEmail } from "../app/src/shared/utils/email";
+import { notifyDrawCompletedByPhone } from "../app/src/shared/utils/twilio";
 
 type GroupRow = {
   id: string;
