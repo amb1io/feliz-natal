@@ -5,7 +5,6 @@ import {
   sendGroupCreatedEmail,
   sendInviteEmail
 } from '../../shared/utils/email';
-import { notifyInviteByPhone } from '../../shared/utils/twilio';
 
 export const prerender = false;
 
@@ -103,18 +102,6 @@ const sendAddedToGroupSafely = async (
     });
   } catch (error) {
     console.error('Erro ao enviar email de adição ao grupo:', error);
-  }
-};
-const sendPhoneInviteSafely = async (phone: string | null, token: string, groupTitle: string) => {
-  if (!phone) return;
-  try {
-    await notifyInviteByPhone(env, {
-      phone,
-      groupTitle,
-      inviteLink: buildInviteLink(token)
-    });
-  } catch (error) {
-    console.error('Erro ao enviar convite por telefone:', error);
   }
 };
 const orcamentoMinimo = formData.get('orcamento_minimo')?.toString();
@@ -388,9 +375,6 @@ if (!titulo || !dataSorteio) {
               if (email) {
                 await sendInviteSafely(email, inviteToken, titulo, organizerName);
               }
-              if (telefone) {
-                await sendPhoneInviteSafely(telefone, inviteToken, titulo);
-              }
             }
           }
         }
@@ -574,9 +558,6 @@ if (!titulo || !dataSorteio) {
             .run();
           if (email) {
             await sendInviteSafely(email, inviteToken, titulo, organizerName);
-          }
-          if (telefone) {
-            await sendPhoneInviteSafely(telefone, inviteToken, titulo);
           }
         }
 
