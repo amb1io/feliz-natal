@@ -71,10 +71,10 @@ const invite = {
 };
 
 const supportedProviders = (
-  import.meta.env.PUBLIC_COGNITO_SUPPORTED_PROVIDERS ?? "Google"
+  import.meta.env.PUBLIC_COGNITO_SUPPORTED_PROVIDERS ?? "Google,Facebook"
 )
   .split(",")
-  .map((provider) => provider.trim())
+  .map((provider: string) => provider.trim())
   .filter(Boolean);
 
 const cognitoConfig = {
@@ -92,6 +92,12 @@ const providerDefinitions = [
     name: "Google",
     accent: "bg-white text-[#1F2937] hover:bg-[#F3F4F6] border border-gray-300",
     icon: "google",
+  },
+  {
+    id: "Facebook",
+    name: "Facebook",
+    accent: "bg-[#1877F2] !text-white hover:bg-[#166FE5]",
+    icon: "facebook",
   },
   {
     id: "Microsoft",
@@ -451,6 +457,17 @@ if (session) {
                         />
                       </svg>
                     )}
+                    {provider.icon === "facebook" && (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        class="h-5 w-5"
+                        fill="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path d="M24 12.073C24 5.404 18.627 0 12 0S0 5.404 0 12.073C0 18.099 4.388 23.094 10.125 24v-8.438H7.078v-3.49h3.047V9.414c0-3.017 1.791-4.683 4.533-4.683 1.313 0 2.686.236 2.686.236v2.963h-1.515c-1.491 0-1.956.929-1.956 1.882v2.26h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.099 24 12.073Z" />
+                      </svg>
+                    )}
                   </span>
                   <span>Continuar com {provider.name}</span>
                 </a>
@@ -459,7 +476,7 @@ if (session) {
               <p class="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-center text-xs text-[var(--color-text-muted)]">
                 Nenhum provedor social foi habilitado. Ajuste
                 <code>PUBLIC_COGNITO_SUPPORTED_PROVIDERS</code> para incluir
-                <code>Google</code>, <code>Microsoft</code> e/ou
+                <code>Google</code>, <code>Facebook</code>, <code>Microsoft</code> e/ou
                 <code>Slack</code> e preencha as variáveis do Cognito.
               </p>
             )
