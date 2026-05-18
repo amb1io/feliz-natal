@@ -6,7 +6,12 @@ export type WhatsAppCloudConfig = {
 	apiVersion: string;
 	templateName?: string;
 	templateLanguage: string;
+	templateComponents: TemplateComponentsMode;
+	useNamedParameters: boolean;
+	includeHeaderImage: boolean;
+	includeInviteButton: boolean;
 	siteBaseUrl: string;
+	headerImageUrl: string;
 	defaultCountryCode: string;
 };
 
@@ -16,6 +21,8 @@ export type SendInviteWhatsAppOptions = {
 	inviteLink: string;
 	groupOwner?: string | null;
 };
+
+type TemplateComponentsMode = 'none' | 'body' | 'header_body' | 'body_button';
 
 type WhatsAppSendResponse = {
 	messaging_product?: string;
@@ -51,13 +58,29 @@ const readEnvValue = (env: EnvSource, keys: string[]): string | undefined => {
 	return undefined;
 };
 
+const parseComponentsMode = (value?: string): TemplateComponentsMode => {
+	const normalized = value?.trim().toLowerCase();
+	if (normalized === 'none' || normalized === 'body' || normalized === 'header_body' || normalized === 'body_button') {
+		return normalized;
+	}
+
+	return 'body';
+};
+
 export const buildWhatsAppCloudConfig = (env?: EnvSource): WhatsAppCloudConfig => ({
 	accessToken: readEnvValue(env, ['WHATSAPP_ACCESS_TOKEN', 'META_WHATSAPP_ACCESS_TOKEN']),
 	phoneNumberId: readEnvValue(env, ['WHATSAPP_PHONE_NUMBER_ID', 'META_WHATSAPP_PHONE_NUMBER_ID']),
-	apiVersion: readEnvValue(env, ['WHATSAPP_API_VERSION']) ?? 'v21.0',
+	apiVersion: readEnvValue(env, ['WHATSAPP_API_VERSION']) ?? 'v25.0',
 	templateName: readEnvValue(env, ['WHATSAPP_INVITE_TEMPLATE_NAME']),
 	templateLanguage: readEnvValue(env, ['WHATSAPP_INVITE_TEMPLATE_LANG']) ?? 'pt_BR',
+	templateComponents: parseComponentsMode(readEnvValue(env, ['WHATSAPP_INVITE_TEMPLATE_COMPONENTS'])),
+	useNamedParameters: readEnvValue(env, ['WHATSAPP_INVITE_USE_NAMED_PARAMETERS']) === 'true',
+	includeHeaderImage: readEnvValue(env, ['WHATSAPP_INVITE_INCLUDE_HEADER']) === 'true',
+	includeInviteButton: readEnvValue(env, ['WHATSAPP_INVITE_INCLUDE_BUTTON']) === 'true',
 	siteBaseUrl: readEnvValue(env, ['WHATSAPP_SITE_BASE_URL', 'PUBLIC_SITE_URL']) ?? 'https://feliz.natal.br',
+	headerImageUrl:
+		readEnvValue(env, ['WHATSAPP_HEADER_IMAGE_URL']) ??
+		`${readEnvValue(env, ['WHATSAPP_SITE_BASE_URL', 'PUBLIC_SITE_URL']) ?? 'https://feliz.natal.br'}/og-image-whatsapp.jpg`,
 	defaultCountryCode: readEnvValue(env, ['WHATSAPP_DEFAULT_COUNTRY_CODE']) ?? '55'
 });
 
@@ -111,37 +134,71 @@ type ImageTemplateParameter = {
 
 type TemplateComponent =
 	| { type: 'header'; parameters: ImageTemplateParameter[] }
-	| { type: 'body'; parameters: TemplateParameter[] };
+	| { type: 'body'; parameters: TemplateParameter[] }
+	| {
+			type: 'button';
+			sub_type: 'url';
+			index: string;
+			parameters: TemplateParameter[];
+	  };
 
-const resolveHeaderImageUrl = (siteBaseUrl: string): string => {
-	try {
-		return new URL('/og-image.png', siteBaseUrl).toString();
-	} catch {
-		return 'https://feliz.natal.br/og-image.png';
+const resolveHeaderImageUrl = (config: WhatsAppCloudConfig): string => config.headerImageUrl;
+
+const buildTextParameter = (text: string, parameterName?: string): TemplateParameter => {
+	const parameter: TemplateParameter = { type: 'text', text };
+	if (parameterName) {
+		parameter.parameter_name = parameterName;
 	}
+	return parameter;
 };
 
 const buildInviteTemplateComponents = (
 	options: SendInviteWhatsAppOptions,
 	config: WhatsAppCloudConfig
-): TemplateComponent[] => {
+): TemplateComponent[] | undefined => {
+	if (config.templateComponents === 'none') {
+		return undefined;
+	}
+
 	const owner = (options.groupOwner ?? 'Alguém').trim() || 'Alguém';
 	const title = options.groupTitle.trim() || 'Amigo secreto';
-	const headerImageUrl = resolveHeaderImageUrl(config.siteBaseUrl);
+	const components: TemplateComponent[] = [];
 
-	return [
-		{
+	const shouldIncludeHeader =
+		config.templateComponents === 'header_body' || config.includeHeaderImage;
+
+	if (shouldIncludeHeader) {
+		components.push({
 			type: 'header',
-			parameters: [{ type: 'image', image: { link: headerImageUrl } }]
-		},
-		{
-			type: 'body',
-			parameters: [
-				{ type: 'text', parameter_name: 'nome_do_grupo', text: title },
-				{ type: 'text', parameter_name: 'dono_do_grupo', text: owner }
+			parameters: [{ type: 'image', image: { link: resolveHeaderImageUrl(config) } }]
+		});
+	}
+
+	const bodyParameters: TemplateParameter[] = config.useNamedParameters
+		? [
+				buildTextParameter(title, 'nome_do_grupo'),
+				buildTextParameter(owner, 'dono_do_grupo')
 			]
-		}
-	];
+		: [buildTextParameter(owner), buildTextParameter(title)];
+
+	components.push({
+		type: 'body',
+		parameters: bodyParameters
+	});
+
+	const shouldIncludeButton =
+		config.templateComponents === 'body_button' || config.includeInviteButton;
+
+	if (shouldIncludeButton) {
+		components.push({
+			type: 'button',
+			sub_type: 'url',
+			index: '0',
+			parameters: [buildTextParameter(buildInviteButtonSuffix(options.inviteLink, config.siteBaseUrl))]
+		});
+	}
+
+	return components;
 };
 
 export const sendInviteWhatsApp = async (
@@ -161,16 +218,22 @@ export const sendInviteWhatsApp = async (
 		return false;
 	}
 
+	const components = buildInviteTemplateComponents(options, config);
+	const template: Record<string, unknown> = {
+		name: config.templateName,
+		language: { code: config.templateLanguage }
+	};
+
+	if (components?.length) {
+		template.components = components;
+	}
+
 	const url = `https://graph.facebook.com/${config.apiVersion}/${config.phoneNumberId}/messages`;
 	const payload = {
 		messaging_product: 'whatsapp',
 		to: recipient,
 		type: 'template',
-		template: {
-			name: config.templateName,
-			language: { code: config.templateLanguage },
-			components: buildInviteTemplateComponents(options, config)
-		}
+		template
 	};
 
 	try {
@@ -183,6 +246,7 @@ export const sendInviteWhatsApp = async (
 					phoneNumberId: config.phoneNumberId,
 					templateName: config.templateName,
 					templateLanguage: config.templateLanguage,
+					templateComponents: config.templateComponents,
 					payload
 				},
 				null,
@@ -219,6 +283,8 @@ export const sendInviteWhatsApp = async (
 						errorCode,
 						errorType,
 						errorMessage,
+						hint:
+							'Confira se WHATSAPP_INVITE_TEMPLATE_NAME/LANG e WHATSAPP_INVITE_TEMPLATE_COMPONENTS batem com o template no Meta.',
 						raw: responseBody
 					},
 					null,
