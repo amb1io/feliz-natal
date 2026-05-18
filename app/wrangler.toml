@@ -48,9 +48,18 @@ migrations_dir = "./migrations"
 binding = "API_CACHE"
 id = "b657448077cc411f83c7bed0378e66dd"
 
+[observability]
+enabled = false
+head_sampling_rate = 1
+
 [observability.logs]
 enabled = true
+head_sampling_rate = 1
+persist = true
 invocation_logs = true
 
 [observability.traces]
 enabled = true
+persist = true
+head_sampling_rate = 1
+
