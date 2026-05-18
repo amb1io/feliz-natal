@@ -4,6 +4,46 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEV_VARS_FILE="${SCRIPT_DIR}/.dev.vars"
+TARGET_ENV=""
+
+usage() {
+  cat <<'EOF'
+Uso:
+  bash ./upload-dev-secrets.sh [--env <ambiente>] [--file <arquivo>]
+
+Exemplos:
+  bash ./upload-dev-secrets.sh
+  bash ./upload-dev-secrets.sh --env dev
+  bash ./upload-dev-secrets.sh --env production --file .dev.vars
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -e|--env)
+      [[ $# -lt 2 ]] && { echo "Erro: faltou valor para $1."; usage; exit 1; }
+      TARGET_ENV="$2"
+      shift 2
+      ;;
+    -f|--file)
+      [[ $# -lt 2 ]] && { echo "Erro: faltou valor para $1."; usage; exit 1; }
+      DEV_VARS_FILE="$2"
+      if [[ "${DEV_VARS_FILE}" != /* ]]; then
+        DEV_VARS_FILE="${SCRIPT_DIR}/${DEV_VARS_FILE}"
+      fi
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Erro: argumento desconhecido: $1"
+      usage
+      exit 1
+      ;;
+  esac
+done
 
 if ! command -v wrangler >/dev/null 2>&1; then
   echo "Erro: wrangler nao encontrado no PATH."
@@ -11,7 +51,7 @@ if ! command -v wrangler >/dev/null 2>&1; then
 fi
 
 if [[ ! -f "${DEV_VARS_FILE}" ]]; then
-  echo "Erro: arquivo .dev.vars nao encontrado em ${DEV_VARS_FILE}."
+  echo "Erro: arquivo de variaveis nao encontrado em ${DEV_VARS_FILE}."
   exit 1
 fi
 
@@ -40,6 +80,10 @@ trim_quotes() {
 
 uploaded=0
 skipped=0
+env_flag=()
+if [[ -n "${TARGET_ENV}" ]]; then
+  env_flag=(--env "${TARGET_ENV}")
+fi
 
 while IFS= read -r raw_line || [[ -n "${raw_line}" ]]; do
   line="${raw_line#"${raw_line%%[![:space:]]*}"}"
@@ -64,8 +108,12 @@ while IFS= read -r raw_line || [[ -n "${raw_line}" ]]; do
 
   value="$(trim_quotes "${value}")"
 
-  echo "-> enviando segredo: ${key}"
-  printf '%s' "${value}" | wrangler secret put "${key}"
+  if [[ -n "${TARGET_ENV}" ]]; then
+    echo "-> enviando segredo: ${key} (env: ${TARGET_ENV})"
+  else
+    echo "-> enviando segredo: ${key} (env: default)"
+  fi
+  printf '%s' "${value}" | wrangler secret put "${key}" "${env_flag[@]}"
   uploaded=$((uploaded + 1))
 done < "${DEV_VARS_FILE}"
 
