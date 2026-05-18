@@ -1,5 +1,9 @@
 ---
 import { sendWelcomeEmail } from '../../shared/utils/email';
+import {
+	resolveCognitoClientSecret,
+	resolveCognitoConfig,
+} from '../../shared/utils/cognito-config';
 
 export const prerender = false;
 
@@ -65,15 +69,13 @@ if (errorParam) {
   errorMessage = "Nenhum código de autorização foi retornado pelo Cognito.";
 } else {
   try {
-    const cognitoDomain = import.meta.env.PUBLIC_COGNITO_DOMAIN ?? "";
-    const cognitoClientId = import.meta.env.PUBLIC_COGNITO_CLIENT_ID ?? "";
-    const cognitoRedirectUri =
-      import.meta.env.PUBLIC_COGNITO_REDIRECT_URI ??
-      `${new URL(Astro.request.url).origin}/auth/callback`;
-    const cognitoClientSecret =
-      import.meta.env.COGNITO_CLIENT_SECRET ??
-      import.meta.env.PRIVATE_COGNITO_CLIENT_SECRET ??
-      null;
+    const cognitoConfig = resolveCognitoConfig(env, {
+      requestUrl: Astro.request.url,
+    });
+    const cognitoDomain = cognitoConfig.domain;
+    const cognitoClientId = cognitoConfig.clientId;
+    const cognitoRedirectUri = cognitoConfig.redirectUri;
+    const cognitoClientSecret = resolveCognitoClientSecret(env);
 
     console.log("asdad11");
 
