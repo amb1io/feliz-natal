@@ -3,6 +3,7 @@ import addedToGroupTemplate from "../../templates/email-added-to-group.html?raw"
 import drawCompletedTemplate from "../../templates/email-draw-completed.html?raw";
 import groupCreatedTemplate from "../../templates/email-group-created.html?raw";
 import inviteTemplate from "../../templates/email-invite.html?raw";
+import secretMessageTemplate from "../../templates/email-secret-message.html?raw";
 import welcomeTemplate from "../../templates/email-welcome.html?raw";
 
 type EmailEnv = {
@@ -58,6 +59,13 @@ type AddedToGroupEmailOptions = {
   inviteLink?: string | null;
   participantName?: string | null;
   groupOwner?: string | null;
+};
+
+type SecretMessageEmailOptions = {
+  to: string;
+  groupTitle: string;
+  groupUrl: string;
+  recipientName?: string | null;
 };
 
 const DEFAULT_FROM_EMAIL = "no-reply@feliz.natal.br";
@@ -362,6 +370,31 @@ export const sendAddedToGroupEmail = async (
   return sendEmail(env, {
     to: formatRecipientAddress(options.to, options.participantName),
     subject: `🎄 Você foi adicionado ao grupo ${options.groupTitle}`,
+    html,
+  });
+};
+
+const buildSecretMessageEmail = ({
+  groupTitle,
+  groupUrl,
+  recipientName,
+}: Omit<SecretMessageEmailOptions, "to">) => {
+  return renderTemplate(secretMessageTemplate, {
+    groupTitle,
+    groupUrl,
+    greetingName: recipientName ? ` ${recipientName}` : "",
+    headerImageUrl: resolveHeaderImageUrl(groupUrl)
+  });
+};
+
+export const sendSecretMessageEmail = async (
+  env: EmailEnv | null | undefined,
+  options: SecretMessageEmailOptions
+) => {
+  const html = buildSecretMessageEmail(options);
+  return sendEmail(env, {
+    to: formatRecipientAddress(options.to, options.recipientName),
+    subject: "Seu amigo secreto falou com você",
     html,
   });
 };

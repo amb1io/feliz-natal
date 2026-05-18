@@ -22,6 +22,13 @@ export type SendInviteWhatsAppOptions = {
 	groupOwner?: string | null;
 };
 
+export type SendSecretMessageWhatsAppOptions = {
+	to: string;
+	groupTitle: string;
+	groupUrl: string;
+	recipientName?: string | null;
+};
+
 type TemplateComponentsMode = 'none' | 'body' | 'header_body' | 'body_button';
 
 type WhatsAppSendResponse = {
@@ -201,6 +208,68 @@ const buildInviteTemplateComponents = (
 	return components;
 };
 
+const buildSecretMessageWhatsAppConfig = (env?: EnvSource): WhatsAppCloudConfig => ({
+	accessToken: readEnvValue(env, ['WHATSAPP_ACCESS_TOKEN', 'META_WHATSAPP_ACCESS_TOKEN']),
+	phoneNumberId: readEnvValue(env, ['WHATSAPP_PHONE_NUMBER_ID', 'META_WHATSAPP_PHONE_NUMBER_ID']),
+	apiVersion: readEnvValue(env, ['WHATSAPP_API_VERSION']) ?? 'v25.0',
+	templateName: readEnvValue(env, ['WHATSAPP_SECRET_MESSAGE_TEMPLATE_NAME']),
+	templateLanguage: readEnvValue(env, ['WHATSAPP_SECRET_MESSAGE_TEMPLATE_LANG']) ?? 'pt_BR',
+	templateComponents: parseComponentsMode(readEnvValue(env, ['WHATSAPP_SECRET_MESSAGE_TEMPLATE_COMPONENTS'])),
+	useNamedParameters: readEnvValue(env, ['WHATSAPP_SECRET_MESSAGE_USE_NAMED_PARAMETERS']) === 'true',
+	includeHeaderImage: readEnvValue(env, ['WHATSAPP_SECRET_MESSAGE_INCLUDE_HEADER']) === 'true',
+	includeInviteButton: readEnvValue(env, ['WHATSAPP_SECRET_MESSAGE_INCLUDE_BUTTON']) === 'true',
+	siteBaseUrl: readEnvValue(env, ['WHATSAPP_SITE_BASE_URL', 'PUBLIC_SITE_URL']) ?? 'https://feliz.natal.br',
+	headerImageUrl:
+		readEnvValue(env, ['WHATSAPP_HEADER_IMAGE_URL']) ??
+		`${readEnvValue(env, ['WHATSAPP_SITE_BASE_URL', 'PUBLIC_SITE_URL']) ?? 'https://feliz.natal.br'}/og-image-whatsapp.jpg`,
+	defaultCountryCode: readEnvValue(env, ['WHATSAPP_DEFAULT_COUNTRY_CODE']) ?? '55'
+});
+
+const buildSecretMessageTemplateComponents = (
+	options: SendSecretMessageWhatsAppOptions,
+	config: WhatsAppCloudConfig
+): TemplateComponent[] | undefined => {
+	if (config.templateComponents === 'none') {
+		return undefined;
+	}
+
+	const title = options.groupTitle.trim() || 'Amigo secreto';
+	const components: TemplateComponent[] = [];
+
+	const shouldIncludeHeader =
+		config.templateComponents === 'header_body' || config.includeHeaderImage;
+
+	if (shouldIncludeHeader) {
+		components.push({
+			type: 'header',
+			parameters: [{ type: 'image', image: { link: resolveHeaderImageUrl(config) } }]
+		});
+	}
+
+	const bodyParameters: TemplateParameter[] = config.useNamedParameters
+		? [buildTextParameter(title, 'nome_do_grupo')]
+		: [buildTextParameter(title)];
+
+	components.push({
+		type: 'body',
+		parameters: bodyParameters
+	});
+
+	const shouldIncludeButton =
+		config.templateComponents === 'body_button' || config.includeInviteButton;
+
+	if (shouldIncludeButton) {
+		components.push({
+			type: 'button',
+			sub_type: 'url',
+			index: '0',
+			parameters: [buildTextParameter(buildInviteButtonSuffix(options.groupUrl, config.siteBaseUrl))]
+		});
+	}
+
+	return components;
+};
+
 export const sendInviteWhatsApp = async (
 	env: EnvSource,
 	options: SendInviteWhatsAppOptions
@@ -318,6 +387,127 @@ export const sendInviteWhatsApp = async (
 		return true;
 	} catch (error) {
 		console.error('[whatsapp-cloud] Erro inesperado ao enviar convite:', error);
+		return false;
+	}
+};
+
+export const sendSecretMessageWhatsApp = async (
+	env: EnvSource,
+	options: SendSecretMessageWhatsAppOptions
+): Promise<boolean> => {
+	const config = buildSecretMessageWhatsAppConfig(env);
+
+	if (!isWhatsAppCloudConfigured(config)) {
+		console.warn('[whatsapp-cloud] Credenciais ou template de mensagem secreta não configurados.');
+		return false;
+	}
+
+	const recipient = normalizeWhatsAppPhone(options.to, config.defaultCountryCode);
+	if (!recipient) {
+		console.warn('[whatsapp-cloud] Telefone inválido para mensagem secreta:', options.to);
+		return false;
+	}
+
+	const components = buildSecretMessageTemplateComponents(options, config);
+	const template: Record<string, unknown> = {
+		name: config.templateName,
+		language: { code: config.templateLanguage }
+	};
+
+	if (components?.length) {
+		template.components = components;
+	}
+
+	const url = `https://graph.facebook.com/${config.apiVersion}/${config.phoneNumberId}/messages`;
+	const payload = {
+		messaging_product: 'whatsapp',
+		to: recipient,
+		type: 'template',
+		template
+	};
+
+	try {
+		console.info(
+			'[whatsapp-cloud] Payload de mensagem secreta:',
+			JSON.stringify(
+				{
+					url,
+					apiVersion: config.apiVersion,
+					phoneNumberId: config.phoneNumberId,
+					templateName: config.templateName,
+					templateLanguage: config.templateLanguage,
+					templateComponents: config.templateComponents,
+					payload
+				},
+				null,
+				2
+			)
+		);
+
+		const response = await fetch(url, {
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${config.accessToken}`,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify(payload)
+		});
+
+		const responseBody = await response.text();
+		let parsedResponse: WhatsAppSendResponse | null = null;
+		try {
+			parsedResponse = responseBody ? (JSON.parse(responseBody) as WhatsAppSendResponse) : null;
+		} catch {
+			parsedResponse = null;
+		}
+
+		if (!response.ok) {
+			const errorCode = parsedResponse?.error?.code ?? 'n/a';
+			const errorType = parsedResponse?.error?.type ?? 'n/a';
+			const errorMessage = parsedResponse?.error?.message ?? responseBody;
+			console.error(
+				'[whatsapp-cloud] Falha ao enviar template de mensagem secreta:',
+				JSON.stringify(
+					{
+						status: response.status,
+						errorCode,
+						errorType,
+						errorMessage,
+						hint:
+							'Confira WHATSAPP_SECRET_MESSAGE_TEMPLATE_NAME/LANG e WHATSAPP_SECRET_MESSAGE_TEMPLATE_COMPONENTS no Meta.',
+						raw: responseBody
+					},
+					null,
+					2
+				)
+			);
+			return false;
+		}
+
+		const wamid = parsedResponse?.messages?.[0]?.id ?? null;
+		const messageStatus = parsedResponse?.messages?.[0]?.message_status ?? null;
+		const waId = parsedResponse?.contacts?.[0]?.wa_id ?? null;
+
+		console.info(
+			'[whatsapp-cloud] Template de mensagem secreta aceito pela Meta:',
+			JSON.stringify(
+				{
+					status: response.status,
+					wamid,
+					messageStatus,
+					waId,
+					templateName: config.templateName,
+					to: recipient,
+					raw: parsedResponse ?? responseBody
+				},
+				null,
+				2
+			)
+		);
+
+		return true;
+	} catch (error) {
+		console.error('[whatsapp-cloud] Erro inesperado ao enviar mensagem secreta:', error);
 		return false;
 	}
 };

@@ -5,8 +5,15 @@ import Footer from '../../../components/Footer.astro';
 import UpdateItem from '../../../components/UpdateItem.astro';
 import ActionButton from '../../../components/ActionButton.astro';
 import { computeInitials, renderMessageList } from '../../../utils/message-renderer';
-import { sendDrawCompletedEmail, sendInviteEmail } from '../../../shared/utils/email';
-import { sendInviteWhatsApp } from '../../../shared/utils/whatsapp-cloud';
+import {
+	sendDrawCompletedEmail,
+	sendInviteEmail,
+	sendSecretMessageEmail
+} from '../../../shared/utils/email';
+import {
+	sendInviteWhatsApp,
+	sendSecretMessageWhatsApp
+} from '../../../shared/utils/whatsapp-cloud';
 
 type FelizNatalEnv = {
 	DB: D1Database;
@@ -252,6 +259,58 @@ if (Astro.request.method === 'POST') {
 				)
 					.bind(messageId, groupId, userId, recipientId, messageContent)
 					.run();
+
+				try {
+					const recipientRecord = await env.DB.prepare(
+						`SELECT nome, email, telefone
+						 FROM usuario
+						 WHERE id = ?
+						 LIMIT 1`
+					)
+						.bind(recipientId)
+						.first();
+
+					const recipientEmail =
+						(recipientRecord as { email?: string | null } | null)?.email?.trim() ?? null;
+					const recipientPhone =
+						(recipientRecord as { telefone?: string | null } | null)?.telefone?.trim() ?? null;
+					const recipientName =
+						(recipientRecord as { nome?: string | null } | null)?.nome ?? null;
+					const secretGroupTitle = (grupoRow as { titulo: string }).titulo;
+					const secretGroupSlug = (grupoRow as { slug: string }).slug;
+					const secretGroupUrl = new URL(
+						`/app/grupo/${encodeURIComponent(secretGroupSlug)}?openSecret=1`,
+						Astro.url
+					).toString();
+
+					if (recipientEmail) {
+						const sent = await sendSecretMessageEmail(env as any, {
+							to: recipientEmail,
+							groupTitle: secretGroupTitle,
+							groupUrl: secretGroupUrl,
+							recipientName: recipientName
+						});
+
+						if (!sent) {
+							console.warn('Nao foi possivel enviar email de mensagem secreta para:', recipientEmail);
+						}
+					}
+
+					if (recipientPhone) {
+						const sent = await sendSecretMessageWhatsApp(env, {
+							to: recipientPhone,
+							groupTitle: secretGroupTitle,
+							groupUrl: secretGroupUrl,
+							recipientName
+						});
+
+						if (!sent) {
+							console.warn('Nao foi possivel enviar WhatsApp de mensagem secreta para:', recipientPhone);
+						}
+					}
+				} catch (error) {
+					console.error('Erro ao enviar alertas de mensagem secreta:', error);
+				}
 
 				await createNotification(
 					recipientId,
