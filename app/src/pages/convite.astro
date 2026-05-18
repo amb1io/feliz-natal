@@ -1,5 +1,12 @@
 ---
 import Layout from "../layouts/Layout.astro";
+import {
+  buildCognitoAuthorizeUrl,
+  buildCognitoSocialProviders,
+  getCognitoDisabledClasses,
+  hasCognitoConfig,
+  resolveCognitoConfig,
+} from "../shared/utils/cognito-config";
 
 export const prerender = false;
 
@@ -69,87 +76,18 @@ const invite = {
     "Amigo secreto especial",
 };
 
-const supportedProviders = (
-  import.meta.env.PUBLIC_COGNITO_SUPPORTED_PROVIDERS ?? "Google,Facebook"
-)
-  .split(",")
-  .map((provider: string) => provider.trim())
-  .filter(Boolean);
-
-const cognitoConfig = {
-  domain: import.meta.env.PUBLIC_COGNITO_DOMAIN ?? "",
-  clientId: import.meta.env.PUBLIC_COGNITO_CLIENT_ID ?? "",
-  redirectUri: import.meta.env.PUBLIC_COGNITO_REDIRECT_URI ?? "",
-  logoutUri: import.meta.env.PUBLIC_COGNITO_LOGOUT_URI ?? "",
-  region: import.meta.env.PUBLIC_COGNITO_REGION ?? "",
-  providers: supportedProviders,
-};
-
-const providerDefinitions = [
-  {
-    id: "Google",
-    name: "Google",
-    accent: "bg-white text-[#1F2937] hover:bg-[#F3F4F6] border border-gray-300",
-    icon: "google",
-  },
-  {
-    id: "Facebook",
-    name: "Facebook",
-    accent: "bg-[#1877F2] !text-white hover:bg-[#166FE5]",
-    icon: "facebook",
-  },
-  {
-    id: "Microsoft",
-    name: "Microsoft",
-    accent: "bg-[#2563EB] !text-white hover:bg-[#1D4ED8]",
-    icon: "microsoft",
-  },
-  {
-    id: "Slack",
-    name: "Slack",
-    accent: "bg-[#1A1D21] !text-white hover:bg-[#0F1114]",
-    icon: "slack",
-  },
-];
-
-const normalizeDomain = (value = "") =>
-  value.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
-const hasCognitoConfig = Boolean(
-  cognitoConfig.domain && cognitoConfig.clientId && cognitoConfig.redirectUri
-);
-
-const buildAuthorizeUrl = (provider?: string, state?: string) => {
-  if (!hasCognitoConfig) return "#";
-  const domain = normalizeDomain(cognitoConfig.domain);
-  const params = new URLSearchParams({
-    response_type: "code",
-    client_id: cognitoConfig.clientId,
-    redirect_uri: cognitoConfig.redirectUri,
-    scope: "email openid profile",
-  });
-  if (provider) {
-    params.append("identity_provider", provider);
-  }
-  if (state) {
-    params.set("state", state);
-  }
-  return `https://${domain}/oauth2/authorize?${params.toString()}`;
-};
+const cognitoConfig = resolveCognitoConfig(env);
 
 const returnToPath = `/convite?token=${encodeURIComponent(invite.token)}`;
 const invitationState = `invitation:${encodeURIComponent(returnToPath)}`;
 
-const socialProviders = providerDefinitions
-  .filter((definition) => cognitoConfig.providers.includes(definition.id))
-  .map((definition) => ({
-    ...definition,
-    href: buildAuthorizeUrl(definition.id, invitationState),
-  }));
-
-const hostedLoginUrl = buildAuthorizeUrl(undefined, invitationState);
-const disabledClasses = hasCognitoConfig
-  ? ""
-  : "pointer-events-none opacity-50";
+const socialProviders = buildCognitoSocialProviders(cognitoConfig, {
+  state: invitationState,
+});
+const hostedLoginUrl = buildCognitoAuthorizeUrl(cognitoConfig, {
+  state: invitationState,
+});
+const disabledClasses = getCognitoDisabledClasses(cognitoConfig);
 
 let acceptanceError: string | null = null;
 
@@ -391,7 +329,7 @@ if (session) {
                 <a
                   href={provider.href}
                   class={`scroll-fade flex w-full items-center justify-center gap-3 rounded-full px-5 py-3 text-sm font-semibold transition ${provider.accent} ${disabledClasses}`}
-                  {...(!hasCognitoConfig ? { "aria-disabled": "true" } : {})}
+                  {...(!hasCognitoConfig(cognitoConfig) ? { "aria-disabled": "true" } : {})}
                 >
                   <span class="flex h-5 w-5 items-center justify-center">
                     {provider.icon === "microsoft" && (
