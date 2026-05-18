@@ -18,7 +18,7 @@ type RuntimeEnv =
 	| null;
 
 const resolveEnv = (locals: { cloudflare?: { env?: RuntimeEnv }; runtime?: { env?: RuntimeEnv }; env?: RuntimeEnv } | null | undefined) =>
-	locals?.cloudflare?.env ?? locals?.runtime?.env ?? locals?.env ?? null;
+	locals?.cloudflare?.env ?? locals?.env ?? null;
 
 export const DELETE: APIRoute = async ({ params, locals, cookies }) => {
 	const env = resolveEnv(locals);

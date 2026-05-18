@@ -1,7 +1,6 @@
 ---
 import FormSuccess from '../../components/FormSuccess.astro';
 import {
-  sendAddedToGroupEmail,
   sendGroupCreatedEmail,
   sendInviteEmail
 } from '../../shared/utils/email';
@@ -9,7 +8,7 @@ import { sendInviteWhatsApp } from '../../shared/utils/whatsapp-cloud';
 
 export const prerender = false;
 
-const env = Astro.locals.cloudflare?.env ?? Astro.locals.runtime?.env ?? Astro.locals?.env;
+const env = Astro.locals.cloudflare?.env ?? Astro.locals?.env;
 const session = Astro.cookies.get('felizNatalSession')?.value ?? null;
 
 let redirectLocation: string | null = null;
@@ -100,26 +99,6 @@ const sendGroupCreatedSafely = async (
     });
   } catch (error) {
     console.error('Erro ao enviar email de grupo criado:', error);
-  }
-};
-const sendAddedToGroupSafely = async (
-  email: string | null,
-  groupOwner: string | null,
-  groupTitle: string,
-  groupUrl: string,
-  inviteLink: string | null
-) => {
-  if (!email) return;
-  try {
-    await sendAddedToGroupEmail(env, {
-      to: email,
-      groupOwner,
-      groupTitle,
-      groupUrl,
-      inviteLink
-    });
-  } catch (error) {
-    console.error('Erro ao enviar email de adição ao grupo:', error);
   }
 };
 const orcamentoMinimo = formData.get('orcamento_minimo')?.toString();
@@ -543,13 +522,10 @@ if (!titulo || !dataSorteio) {
         `INSERT INTO convite (id, grupo_id, email, telefone, token, status, enviado_em)
          VALUES (?, ?, ?, ?, ?, ?, ?)`
       );
-      const participantEmailNotificationsSent = new Set<string>();
 
       for (const participante of participantes) {
         const email = (participante.email ?? '').toString().trim() || null;
         const telefone = (participante.telefone ?? '').toString().trim() || null;
-        const emailLower = email ? email.toLowerCase() : null;
-        let inviteLink: string | null = null;
 
         if (email) {
           const usuarioExistente = await db
@@ -570,18 +546,12 @@ if (!titulo || !dataSorteio) {
         if (email || telefone) {
           const inviteId = crypto.randomUUID();
           const inviteToken = crypto.randomUUID();
-          inviteLink = buildInviteLink(inviteToken);
           await insertConvite
             .bind(inviteId, grupoId, email, telefone, inviteToken, 'pendente', agora)
             .run();
           if (email || telefone) {
             await sendInviteSafely(email, telefone, inviteToken, titulo, organizerName);
           }
-        }
-
-        if (email && emailLower && !participantEmailNotificationsSent.has(emailLower)) {
-          participantEmailNotificationsSent.add(emailLower);
-          await sendAddedToGroupSafely(email, organizerName, titulo, groupUrl, inviteLink);
         }
       }
 

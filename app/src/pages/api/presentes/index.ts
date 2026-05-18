@@ -26,7 +26,7 @@ const resolveEnv = (
 		  }
 		| null
 		| undefined
-) => locals?.cloudflare?.env ?? locals?.runtime?.env ?? locals?.env ?? null;
+) => locals?.cloudflare?.env ?? locals?.env ?? null;
 
 const slugify = (value: string) =>
 	value

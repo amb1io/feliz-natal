@@ -1,0 +1,13 @@
+---
+interface Props {
+	maxWidth?: string;
+}
+
+const { maxWidth = 'max-w-md' } = Astro.props;
+---
+
+<div
+	class={`w-full ${maxWidth} rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[0_18px_36px_rgba(109,76,65,0.2)]`}
+>
+	<slot />
+</div>

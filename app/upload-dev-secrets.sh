@@ -4,17 +4,20 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEV_VARS_FILE="${SCRIPT_DIR}/.dev.vars"
+WRANGLER_CONFIG_FILE="${SCRIPT_DIR}/wrangler.toml"
 TARGET_ENV=""
+WORKER_NAME=""
 
 usage() {
   cat <<'EOF'
 Uso:
-  bash ./upload-dev-secrets.sh [--env <ambiente>] [--file <arquivo>]
+  bash ./upload-dev-secrets.sh [--env <ambiente>] [--file <arquivo>] [--name <worker>] [--config <arquivo>]
 
 Exemplos:
   bash ./upload-dev-secrets.sh
   bash ./upload-dev-secrets.sh --env dev
   bash ./upload-dev-secrets.sh --env production --file .dev.vars
+  bash ./upload-dev-secrets.sh --name feliz-natal
 EOF
 }
 
@@ -31,6 +34,19 @@ while [[ $# -gt 0 ]]; do
       if [[ "${DEV_VARS_FILE}" != /* ]]; then
         DEV_VARS_FILE="${SCRIPT_DIR}/${DEV_VARS_FILE}"
       fi
+      shift 2
+      ;;
+    -c|--config)
+      [[ $# -lt 2 ]] && { echo "Erro: faltou valor para $1."; usage; exit 1; }
+      WRANGLER_CONFIG_FILE="$2"
+      if [[ "${WRANGLER_CONFIG_FILE}" != /* ]]; then
+        WRANGLER_CONFIG_FILE="${SCRIPT_DIR}/${WRANGLER_CONFIG_FILE}"
+      fi
+      shift 2
+      ;;
+    -n|--name)
+      [[ $# -lt 2 ]] && { echo "Erro: faltou valor para $1."; usage; exit 1; }
+      WORKER_NAME="$2"
       shift 2
       ;;
     -h|--help)
@@ -52,6 +68,31 @@ fi
 
 if [[ ! -f "${DEV_VARS_FILE}" ]]; then
   echo "Erro: arquivo de variaveis nao encontrado em ${DEV_VARS_FILE}."
+  exit 1
+fi
+
+if [[ ! -f "${WRANGLER_CONFIG_FILE}" ]]; then
+  echo "Erro: arquivo de configuracao do wrangler nao encontrado em ${WRANGLER_CONFIG_FILE}."
+  exit 1
+fi
+
+if [[ -z "${WORKER_NAME}" ]]; then
+  WORKER_NAME="$(
+    awk -F= '
+      /^[[:space:]]*name[[:space:]]*=/ {
+        value=$2
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+        gsub(/^"/, "", value)
+        gsub(/"$/, "", value)
+        print value
+        exit
+      }
+    ' "${WRANGLER_CONFIG_FILE}"
+  )"
+fi
+
+if [[ -z "${WORKER_NAME}" ]]; then
+  echo "Erro: nao foi possivel identificar o nome do worker. Use --name <worker>."
   exit 1
 fi
 
@@ -80,9 +121,9 @@ trim_quotes() {
 
 uploaded=0
 skipped=0
-env_flag=()
+wrangler_args=(--name "${WORKER_NAME}" --config "${WRANGLER_CONFIG_FILE}")
 if [[ -n "${TARGET_ENV}" ]]; then
-  env_flag=(--env "${TARGET_ENV}")
+  wrangler_args+=(--env "${TARGET_ENV}")
 fi
 
 while IFS= read -r raw_line || [[ -n "${raw_line}" ]]; do
@@ -109,11 +150,11 @@ while IFS= read -r raw_line || [[ -n "${raw_line}" ]]; do
   value="$(trim_quotes "${value}")"
 
   if [[ -n "${TARGET_ENV}" ]]; then
-    echo "-> enviando segredo: ${key} (env: ${TARGET_ENV})"
+    echo "-> enviando segredo: ${key} (worker: ${WORKER_NAME}, env: ${TARGET_ENV})"
   else
-    echo "-> enviando segredo: ${key} (env: default)"
+    echo "-> enviando segredo: ${key} (worker: ${WORKER_NAME}, env: default)"
   fi
-  printf '%s' "${value}" | wrangler pages secret put "${key}" "${env_flag[@]}"
+  printf '%s' "${value}" | wrangler secret put "${key}" "${wrangler_args[@]}"
   uploaded=$((uploaded + 1))
 done < "${DEV_VARS_FILE}"
 

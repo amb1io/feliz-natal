@@ -62,7 +62,7 @@ const resolveEnv = (
 		  }
 		| null
 		| undefined
-) => locals?.cloudflare?.env ?? locals?.runtime?.env ?? locals?.env ?? undefined;
+) => locals?.cloudflare?.env ?? locals?.env ?? undefined;
 
 export const GET: APIRoute = async ({ request, locals }) => {
 	const config = buildWhatsAppWebhookConfig(resolveEnv(locals));

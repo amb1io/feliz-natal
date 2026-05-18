@@ -9,7 +9,7 @@ const jsonResponse = (body: Record<string, unknown>, status = 200) =>
 	});
 
 export const POST: APIRoute = async ({ request, locals, cookies }) => {
-	const env = locals.cloudflare?.env ?? locals.runtime?.env ?? locals?.env ?? null;
+	const env = locals.cloudflare?.env ?? locals?.env ?? null;
 	const sessionId = cookies.get('felizNatalSession')?.value ?? null;
 
 	if (!env?.DB || !sessionId) {

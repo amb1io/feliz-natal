@@ -1,0 +1,25 @@
+---
+const options = [
+	{ value: 'ladrao', label: 'Amigo Ladrão' },
+	{ value: 'onca', label: 'Amigo da Onça' },
+	{ value: 'tradicional', label: 'Amigo Tradicional' }
+];
+---
+
+<div class="grid gap-3 sm:grid-cols-3">
+	{
+		options.map((option) => (
+			<label class="flex items-center gap-2 rounded-2xl border border-[rgba(148,163,184,0.2)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text)]">
+				<input
+					type="radio"
+					name="tipo_presente"
+					value={option.value}
+					x-model="form.giftType"
+					class="h-4 w-4"
+					required={option.value === 'ladrao'}
+				/>
+				<span>{option.label}</span>
+			</label>
+		))
+	}
+</div>
