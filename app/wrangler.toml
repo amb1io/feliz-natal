@@ -3,6 +3,26 @@ compatibility_date = "2024-10-01"
 compatibility_flags = [ "nodejs_compat" ]
 pages_build_output_dir = "./dist"
 
+[vars]
+# Public/front-end/runtime configuration (safe to version)
+PUBLIC_COGNITO_DOMAIN = "feliz-natal-user-pool-940943049009.auth.sa-east-1.amazoncognito.com"
+PUBLIC_COGNITO_CLIENT_ID = "1bcmflbijdc71fuse281k2al9b"
+PUBLIC_COGNITO_REDIRECT_URI = "https://feliz.natal.br/auth/callback"
+PUBLIC_COGNITO_LOGOUT_URI = "https://feliz.natal.br/"
+PUBLIC_COGNITO_REGION = "sa-east-1"
+PUBLIC_COGNITO_SUPPORTED_PROVIDERS = "Google,Microsoft,Slack,GitHub,Facebook"
+PUBLIC_GOOGLE_MAPS_KEY = "AIzaSyDEaXuMi-l0UnJ4cipg5wSOr9wOBukt-7Y"
+WEBSOCKET_WORKER_URL = "https://schedule.feliz.natal.br"
+AWS_REGION = "sa-east-1"
+SES_FROM_EMAIL = "contato@feliz.natal.br"
+SES_FROM_NAME = "Feliz Natal"
+WHATSAPP_PHONE_NUMBER_ID = "1040071675863592"
+WHATSAPP_INVITE_TEMPLATE_NAME = "feliz_natal_grupo_criado"
+WHATSAPP_INVITE_TEMPLATE_LANG = "pt_BR"
+WHATSAPP_API_VERSION = "v21.0"
+WHATSAPP_SITE_BASE_URL = "https://feliz.natal.br"
+WHATSAPP_DEFAULT_COUNTRY_CODE = "55"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "feliz-natal"
