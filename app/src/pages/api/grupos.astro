@@ -1,7 +1,7 @@
 ---
 export const prerender = false;
 
-const env = Astro.locals.cloudflare?.env ?? Astro.locals.runtime?.env ?? Astro.locals?.env;
+const env = Astro.locals.cloudflare?.env ?? Astro.locals?.env;
 const session = Astro.cookies.get('felizNatalSession')?.value ?? null;
 
 let grupos: Array<{

@@ -5,7 +5,6 @@ export const prerender = false;
 
 const env =
   Astro.locals.cloudflare?.env ??
-  Astro.locals.runtime?.env ??
   Astro.locals?.env ??
   null;
 

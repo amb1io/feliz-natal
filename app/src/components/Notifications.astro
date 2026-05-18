@@ -12,12 +12,10 @@ type NotificationRecord = {
   mensagem_is_secret?: number | boolean | null;
 };
 
-const env =
-  Astro.locals.cloudflare?.env ??
-  Astro.locals.runtime?.env ??
-  Astro.locals?.env ??
-  null;
-const sessionId = Astro.cookies.get("felizNatalSession")?.value ?? null;
+import { getEnv, getSessionUserId } from "../server/request-context";
+
+const env = getEnv(Astro.locals);
+const sessionId = getSessionUserId(Astro.cookies);
 
 const formatRelativeTime = (value?: string | null) => {
   if (!value) return "";

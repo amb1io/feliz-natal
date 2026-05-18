@@ -1,0 +1,28 @@
+---
+interface Props {
+	initials: string;
+	variant?: 'primary' | 'secondary';
+	size?: 'sm' | 'md' | 'lg';
+}
+
+const { initials, variant = 'primary', size = 'md' } = Astro.props;
+
+const sizeClasses = {
+	sm: 'h-12 w-12 text-sm',
+	md: 'h-16 w-16 text-base',
+	lg: 'h-16 w-16 text-base'
+};
+
+const variantClasses = {
+	primary:
+		'border-[rgba(230,57,70,0.35)] bg-[rgba(230,57,70,0.12)] text-[var(--color-primary)] shadow-[0_6px_14px_rgba(230,57,70,0.18)]',
+	secondary:
+		'border-[rgba(42,157,143,0.35)] bg-[rgba(42,157,143,0.12)] text-[var(--color-text-muted)] shadow-[0_6px_14px_rgba(42,157,143,0.18)]'
+};
+---
+
+<span
+	class={`flex items-center justify-center rounded-full border font-semibold uppercase ${sizeClasses[size]} ${variantClasses[variant]}`}
+>
+	{initials}
+</span>

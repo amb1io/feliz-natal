@@ -18,7 +18,7 @@ export const GET: APIRoute = async ({ request, params, locals, cookies }) => {
 		return jsonResponse(426, 'Expected websocket Upgrade header');
 	}
 
-	const env = (locals.cloudflare?.env ?? locals.runtime?.env ?? locals?.env) as FelizNatalEnv | undefined;
+	const env = (locals.cloudflare?.env ?? locals?.env) as FelizNatalEnv | undefined;
 	if (!env?.DB || !env?.PRESENTES_STATE) {
 		return jsonResponse(500, 'Cloudflare bindings not available');
 	}
