@@ -217,12 +217,17 @@ const googleMapsKey = import.meta.env.PUBLIC_GOOGLE_MAPS_KEY ?? "";
       <form
         class="space-y-0"
         x-ref="form"
+        x-on:submit="startSubmitting"
         hx-post="/api/grupo-novo"
         hx-target="#form-feedback"
         hx-swap="innerHTML"
-      hx-on::before-request="document.getElementById('form-feedback').innerHTML = 'Salvando registro...';"
       >
         <input type="hidden" name="grupo_id" value={groupInitialData?.id ?? ""} />
+        <fieldset
+          class="space-y-0"
+          :disabled="isSubmitting"
+          :class="isSubmitting ? 'pointer-events-none opacity-90' : ''"
+        >
         <section
           class="space-y-4 bg-[var(--color-surface)] px-6 py-6 shadow-[0_12px_24px_rgba(109,76,65,0.1)]"
         >
@@ -614,11 +619,21 @@ const googleMapsKey = import.meta.env.PUBLIC_GOOGLE_MAPS_KEY ?? "";
         <div class="mt-10 flex justify-center">
           <button
             type="submit"
-            class="scroll-fade inline-flex w-full max-w-sm items-center justify-center gap-3 rounded-full bg-[var(--color-primary)] px-6 py-4 text-base font-semibold uppercase text-[var(--color-primary-foreground)] shadow-[0_10px_24px_rgba(230,57,70,0.2)] transition hover:shadow-[0_14px_30px_rgba(230,57,70,0.28)]"
+            :disabled="isSubmitting"
+            class="scroll-fade inline-flex w-full max-w-sm items-center justify-center gap-3 rounded-full bg-[var(--color-primary)] px-6 py-4 text-base font-semibold uppercase text-[var(--color-primary-foreground)] shadow-[0_10px_24px_rgba(230,57,70,0.2)] transition hover:shadow-[0_14px_30px_rgba(230,57,70,0.28)] disabled:cursor-not-allowed disabled:bg-[rgba(230,57,70,0.55)] disabled:shadow-none disabled:hover:shadow-none"
           >
-            {isEditing ? "ATUALIZAR GRUPO" : "SALVAR GRUPO"}
+            <img
+              x-show="isSubmitting"
+              src="https://media.tenor.com/On7kvXhzml4AAAAj/loading-gif.gif"
+              alt="Salvando grupo"
+              class="h-5 w-5 rounded-full object-cover"
+            />
+            <span
+              x-text="isSubmitting ? 'SALVANDO O GRUPO' : (isEditing ? 'ATUALIZAR GRUPO' : 'SALVAR GRUPO')"
+            ></span>
           </button>
         </div>
+        </fieldset>
       </form>
     </main>
 
@@ -728,6 +743,14 @@ const googleMapsKey = import.meta.env.PUBLIC_GOOGLE_MAPS_KEY ?? "";
           INITIAL_DATA?.priceMax ?? 0
         ),
         isEditing: Boolean(INITIAL_DATA?.id),
+        isSubmitting: false,
+        startSubmitting() {
+          this.isSubmitting = true;
+          const feedback = document.getElementById("form-feedback");
+          if (feedback) {
+            feedback.innerHTML = "Salvando registro...";
+          }
+        },
         get priceLabel() {
           if (this.form.noLimit) {
             return `Mínimo R$ ${this.form.priceMin.toFixed(0)} · Sem limite máximo`;

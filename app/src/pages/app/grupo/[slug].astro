@@ -12,6 +12,7 @@ import {
 } from '../../../shared/utils/email';
 import {
 	sendInviteWhatsApp,
+	sendDrawCompletedWhatsApp,
 	sendSecretMessageWhatsApp
 } from '../../../shared/utils/whatsapp-cloud';
 
@@ -262,7 +263,7 @@ if (Astro.request.method === 'POST') {
 
 				try {
 					const recipientRecord = await env.DB.prepare(
-						`SELECT nome, email, telefone
+						`SELECT nome, email
 						 FROM usuario
 						 WHERE id = ?
 						 LIMIT 1`
@@ -272,10 +273,25 @@ if (Astro.request.method === 'POST') {
 
 					const recipientEmail =
 						(recipientRecord as { email?: string | null } | null)?.email?.trim() ?? null;
-					const recipientPhone =
-						(recipientRecord as { telefone?: string | null } | null)?.telefone?.trim() ?? null;
 					const recipientName =
 						(recipientRecord as { nome?: string | null } | null)?.nome ?? null;
+					let recipientPhone: string | null = null;
+					if (recipientEmail) {
+						const inviteRecord = await env.DB.prepare(
+							`SELECT telefone
+							 FROM convite
+							 WHERE grupo_id = ?
+							   AND lower(email) = lower(?)
+							   AND telefone IS NOT NULL
+							   AND trim(telefone) != ''
+							 ORDER BY datetime(COALESCE(aceito_em, enviado_em, criado_em, '1970-01-01')) DESC
+							 LIMIT 1`
+						)
+							.bind(groupId, recipientEmail)
+							.first();
+						recipientPhone =
+							(inviteRecord as { telefone?: string | null } | null)?.telefone?.trim() ?? null;
+					}
 					const secretGroupTitle = (grupoRow as { titulo: string }).titulo;
 					const secretGroupSlug = (grupoRow as { slug: string }).slug;
 					const secretGroupUrl = new URL(
@@ -329,6 +345,25 @@ if (Astro.request.method === 'POST') {
 		}
 	} else if (intent === 'draw') {
 		try {
+			const acceptedInviteRow = await env.DB.prepare(
+				`SELECT COUNT(*) AS total
+				 FROM convite
+				 WHERE grupo_id = ?
+				   AND status = 'aceito'`
+			)
+				.bind(groupId)
+				.first();
+			const acceptedInviteCount = Number(acceptedInviteRow?.total ?? 0);
+			if (acceptedInviteCount < 1) {
+				drawError = 'Espere as pessoas aceitarem o convite antes de fazer o sorteio';
+				if (isHtmxRequest) {
+					return respondText(drawError, 400);
+				}
+				if (isAjaxRequest) {
+					return respondJson({ ok: false, error: drawError }, 400);
+				}
+			}
+
 			const participantsQuery = await env.DB.prepare(
 				`SELECT usuario_id
 				 FROM grupo_participante
@@ -401,9 +436,10 @@ if (Astro.request.method === 'POST') {
 
 					const notificationPromises: Array<Promise<void>> = [];
 					const emailPromises: Array<Promise<unknown>> = [];
+					const whatsappPromises: Array<Promise<unknown>> = [];
 					const participantContacts = new Map<
 						string,
-						{ email: string; nome?: string | null }
+						{ email: string; nome?: string | null; telefone?: string | null }
 					>();
 
 					if (participantIds.length > 0) {
@@ -426,8 +462,52 @@ if (Astro.request.method === 'POST') {
 									});
 								}
 							}
+
+							const participantEmails = Array.from(
+								new Set(
+									Array.from(participantContacts.values())
+										.map((contact) => contact.email?.trim().toLowerCase())
+										.filter((value): value is string => Boolean(value))
+								)
+							);
+							if (participantEmails.length > 0) {
+								const invitePhonesResult = await env.DB.prepare(
+									`SELECT lower(email) AS email_key, telefone
+									 FROM convite
+									 WHERE grupo_id = ?
+									   AND email IS NOT NULL
+									   AND telefone IS NOT NULL
+									   AND trim(telefone) != ''
+									 ORDER BY datetime(COALESCE(aceito_em, enviado_em, criado_em, '1970-01-01')) DESC`
+								)
+									.bind(groupId)
+									.all();
+
+								const phoneByEmail = new Map<string, string>();
+								for (const row of invitePhonesResult?.results ?? []) {
+									const record = row as { email_key?: string | null; telefone?: string | null };
+									const emailKey = record.email_key?.trim().toLowerCase() ?? '';
+									const phoneValue = record.telefone?.trim() ?? '';
+									if (!emailKey || !phoneValue) continue;
+									if (!participantEmails.includes(emailKey)) continue;
+									if (!phoneByEmail.has(emailKey)) {
+										phoneByEmail.set(emailKey, phoneValue);
+									}
+								}
+
+								for (const [participantId, contact] of participantContacts.entries()) {
+									const emailKey = contact.email.trim().toLowerCase();
+									const phoneValue = phoneByEmail.get(emailKey) ?? null;
+									if (phoneValue) {
+										participantContacts.set(participantId, {
+											...contact,
+											telefone: phoneValue
+										});
+									}
+								}
+							}
 						} catch (error) {
-							console.error('Erro ao carregar emails dos participantes:', error);
+							console.error('Erro ao carregar contatos dos participantes:', error);
 						}
 					}
 
@@ -463,9 +543,18 @@ if (Astro.request.method === 'POST') {
 								})
 							);
 						}
+						if (contact?.telefone) {
+							whatsappPromises.push(
+								sendDrawCompletedWhatsApp(env, {
+									to: contact.telefone,
+									groupTitle,
+									groupUrl
+								})
+							);
+						}
 					}
 
-					await Promise.all([...notificationPromises, ...emailPromises]);
+					await Promise.all([...notificationPromises, ...emailPromises, ...whatsappPromises]);
 
 					const redirectTarget = `${Astro.url.pathname}${Astro.url.search}`;
 					if (isHtmxRequest) {
@@ -674,6 +763,15 @@ const pendingInviteRecords = (pendingInvitesResult?.results ?? []) as Array<{
 	telefone?: string | null;
 	status?: string | null;
 }>;
+const acceptedInviteCountRow = await env.DB.prepare(
+	`SELECT COUNT(*) AS total
+	 FROM convite
+	 WHERE grupo_id = ?
+	   AND status = 'aceito'`
+)
+	.bind(groupId)
+	.first();
+const acceptedInviteCount = Number(acceptedInviteCountRow?.total ?? 0);
 
 const groupStatus = groupStatusValue;
 const isGroupActive = groupStatus === 'ativo';
@@ -1246,6 +1344,7 @@ if (isOrganizer) {
 									method="post"
 									class="flex justify-center"
 									data-draw-form
+									data-accepted-invite-count={String(acceptedInviteCount)}
 									hx-post={Astro.url.pathname + Astro.url.search}
 									hx-swap="none"
 									hx-disabled-elt="[data-draw-submit]"
@@ -1643,6 +1742,28 @@ window.participantModal = function participantModal() {
 			</div>
 		</div>
 	</div>
+	<div
+		class="fixed inset-0 z-[72] hidden items-center justify-center bg-[rgba(15,23,42,0.55)] px-4 py-6"
+		data-draw-alert-modal
+	>
+		<div class="w-full max-w-md space-y-4 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[0_24px_48px_rgba(15,23,42,0.35)]">
+			<header class="space-y-2">
+				<h3 class="text-lg font-semibold text-[var(--color-text)]">Atenção</h3>
+				<p class="text-sm text-[var(--color-text-muted)]">
+					Espere as pessoas aceitarem o convite antes de fazer o sorteio
+				</p>
+			</header>
+			<div class="flex justify-end">
+				<button
+					type="button"
+					class="scroll-fade inline-flex items-center gap-2 rounded-full bg-[var(--color-primary)] px-4 py-2 text-xs font-semibold text-[var(--color-primary-foreground)] shadow-[0_10px_24px_rgba(230,57,70,0.22)] transition hover:shadow-[0_14px_30px_rgba(230,57,70,0.3)]"
+					data-draw-alert-close
+				>
+					Entendi
+				</button>
+			</div>
+		</div>
+	</div>
 
 	{chatEnabled && <script src="/scripts/chat-room.js" defer></script>}
 	<script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js" defer></script>
@@ -1651,10 +1772,25 @@ window.participantModal = function participantModal() {
 (() => {
 	const form = document.querySelector('[data-draw-form]');
 	const loader = document.querySelector('[data-draw-loader]');
+	const alertModal = document.querySelector('[data-draw-alert-modal]');
 	const submitButton = form?.querySelector('[data-draw-submit]');
 	const errorPlaceholder = document.querySelector('[data-draw-error]');
 	let hideTimer = null;
 	if (!form || !loader) return;
+	const acceptedInviteCount = Number(form.dataset.acceptedInviteCount ?? '0');
+	const hasAcceptedInvites = acceptedInviteCount > 0;
+
+	const showAlertModal = () => {
+		if (!(alertModal instanceof HTMLElement)) return;
+		alertModal.classList.remove('hidden');
+		alertModal.classList.add('flex');
+	};
+
+	const hideAlertModal = () => {
+		if (!(alertModal instanceof HTMLElement)) return;
+		alertModal.classList.add('hidden');
+		alertModal.classList.remove('flex');
+	};
 
 	const showLoader = () => {
 		if (hideTimer !== null) {
@@ -1707,8 +1843,13 @@ window.participantModal = function participantModal() {
 	};
 
 	if (!('htmx' in window) || !window.htmx) {
-		form.addEventListener('submit', () => {
+		form.addEventListener('submit', (event) => {
 			if (!isDrawIntent()) return;
+			if (!hasAcceptedInvites) {
+				event.preventDefault();
+				showAlertModal();
+				return;
+			}
 			setError('');
 			showLoader();
 		});
@@ -1717,6 +1858,11 @@ window.participantModal = function participantModal() {
 
 	form.addEventListener('htmx:beforeRequest', (event) => {
 		if (event.target !== form || !isDrawIntent()) return;
+		if (!hasAcceptedInvites) {
+			event.preventDefault();
+			showAlertModal();
+			return;
+		}
 		setError('');
 		showLoader();
 	});
@@ -1741,6 +1887,27 @@ window.participantModal = function participantModal() {
 		hideLoader();
 		setError('Não foi possível realizar o sorteio agora. Verifique sua conexão e tente novamente.');
 	});
+
+	if (alertModal instanceof HTMLElement) {
+		alertModal.addEventListener('click', (event) => {
+			const rawTarget = event.target;
+			if (!(rawTarget instanceof Node)) return;
+			const targetElement =
+				rawTarget instanceof Element ? rawTarget : rawTarget.parentElement;
+			if (!targetElement) return;
+			if (
+				targetElement === alertModal ||
+				targetElement.closest('[data-draw-alert-close]')
+			) {
+				hideAlertModal();
+			}
+		});
+		document.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape' && !alertModal.classList.contains('hidden')) {
+				hideAlertModal();
+			}
+		});
+	}
 })();
 	</script>
 
