@@ -4,6 +4,7 @@ import {
 	resolveCognitoClientSecret,
 	resolveCognitoConfig,
 } from '../../shared/utils/cognito-config';
+import { getEnv } from '../../server/request-context';
 
 export const prerender = false;
 
@@ -13,10 +14,7 @@ const painelRedirect = "/app/painel";
 const loginRedirect = "/app";
 const invitationStatePrefix = "invitation:";
 
-const env =
-  Astro.locals.cloudflare?.env ??
-  Astro.locals?.env ??
-  null;
+const env = getEnv();
 
 const buildRedirectTarget = (state: string | null | undefined) => {
   if (!state) return painelRedirect;

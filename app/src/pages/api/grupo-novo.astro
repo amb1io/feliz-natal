@@ -5,10 +5,11 @@ import {
   sendInviteEmail
 } from '../../shared/utils/email';
 import { sendInviteWhatsApp } from '../../shared/utils/whatsapp-cloud';
+import { getEnv } from '../../server/request-context';
 
 export const prerender = false;
 
-const env = Astro.locals.cloudflare?.env ?? Astro.locals?.env;
+const env = getEnv();
 const session = Astro.cookies.get('felizNatalSession')?.value ?? null;
 
 let redirectLocation: string | null = null;
