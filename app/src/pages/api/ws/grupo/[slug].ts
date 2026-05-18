@@ -1,9 +1,6 @@
 import type { APIRoute } from 'astro';
-
-type FelizNatalEnv = {
-	DB: D1Database;
-	PRESENTES_STATE: DurableObjectNamespace;
-};
+import { getEnv } from '../../../../server/request-context';
+import type { FelizNatalEnv } from '../../../../server/types';
 
 const jsonResponse = (status: number, message: string) =>
 	new Response(JSON.stringify({ message }), {
@@ -13,12 +10,12 @@ const jsonResponse = (status: number, message: string) =>
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ request, params, locals, cookies }) => {
+export const GET: APIRoute = async ({ request, params, cookies }) => {
 	if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
 		return jsonResponse(426, 'Expected websocket Upgrade header');
 	}
 
-	const env = (locals.cloudflare?.env ?? locals?.env) as FelizNatalEnv | undefined;
+	const env = getEnv() as FelizNatalEnv & { PRESENTES_STATE?: DurableObjectNamespace };
 	if (!env?.DB || !env?.PRESENTES_STATE) {
 		return jsonResponse(500, 'Cloudflare bindings not available');
 	}

@@ -2,6 +2,7 @@
 import Layout from "../../layouts/Layout.astro";
 import AppHeader from "../../components/AppHeader.astro";
 import Footer from "../../components/Footer.astro";
+import { getEnv } from "../../server/request-context";
 
 export const prerender = false;
 
@@ -10,9 +11,7 @@ if (!session) {
   return Astro.redirect("/app/");
 }
 
-const env =
-  Astro.locals.cloudflare?.env ??
-  Astro.locals?.env;
+const env = getEnv();
 const PAGE_SIZE = 10;
 const requestedPage = Number.parseInt(
   Astro.url.searchParams.get("page") ?? "1",

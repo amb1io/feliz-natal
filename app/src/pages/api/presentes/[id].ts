@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import type { D1Database } from '@cloudflare/workers-types';
+import { getEnv } from '../../../server/request-context';
 
 export const prerender = false;
 
@@ -11,17 +11,8 @@ const jsonResponse = (body: Record<string, unknown>, status = 200) =>
 		}
 	});
 
-type RuntimeEnv =
-	| {
-			DB?: D1Database;
-	  }
-	| null;
-
-const resolveEnv = (locals: { cloudflare?: { env?: RuntimeEnv }; runtime?: { env?: RuntimeEnv }; env?: RuntimeEnv } | null | undefined) =>
-	locals?.cloudflare?.env ?? locals?.env ?? null;
-
-export const DELETE: APIRoute = async ({ params, locals, cookies }) => {
-	const env = resolveEnv(locals);
+export const DELETE: APIRoute = async ({ params, cookies }) => {
+	const env = getEnv();
 	const sessionId = cookies.get('felizNatalSession')?.value ?? null;
 
 	if (!env?.DB || !sessionId) {

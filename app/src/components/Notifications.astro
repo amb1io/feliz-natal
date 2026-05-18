@@ -14,7 +14,7 @@ type NotificationRecord = {
 
 import { getEnv, getSessionUserId } from "../server/request-context";
 
-const env = getEnv(Astro.locals);
+const env = getEnv();
 const sessionId = getSessionUserId(Astro.cookies);
 
 const formatRelativeTime = (value?: string | null) => {
