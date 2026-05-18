@@ -1,5 +1,4 @@
 import { sendDrawCompletedEmail } from "../app/src/shared/utils/email";
-import { notifyDrawCompletedByPhone } from "../app/src/shared/utils/twilio";
 
 type GroupRow = {
   id: string;
@@ -50,10 +49,6 @@ export default {
 type Env = {
   DB: D1Database;
   SITE_URL?: string;
-  TWILIO_ACCOUNT_SID?: string;
-  TWILIO_AUTH_TOKEN?: string;
-  TWILIO_SMS_FROM?: string;
-  TWILIO_WHATSAPP_FROM?: string;
 };
 
 const fetchGroupsForDate = async (env: Env, isoDate: string) => {
@@ -101,8 +96,6 @@ const runAutomaticDraw = async (env: Env, group: GroupRow) => {
     .run();
 
   const contacts = await fetchParticipantContacts(env, participants);
-  const phoneNumbers = await fetchGroupPhones(env, group.id);
-  const revealDateFriendly = formatFriendlyDate(group.data_revelacao);
 
   const insertResultado = env.DB.prepare(
     `INSERT INTO sorteio_resultado (sorteio_id, remetente_id, recipiente_id)
@@ -134,16 +127,7 @@ const runAutomaticDraw = async (env: Env, group: GroupRow) => {
     }
   }
 
-  const phoneNotifications = phoneNumbers.map((phone) =>
-    notifyDrawCompletedByPhone(env, {
-      phone,
-      groupTitle: group.titulo,
-      groupUrl,
-      revealDate: revealDateFriendly,
-    })
-  );
-
-  await Promise.all([...notificationPromises, ...phoneNotifications]);
+  await Promise.all(notificationPromises);
 
   console.log(`Sorteio automático concluído para o grupo ${group.slug}.`);
 };
@@ -182,21 +166,6 @@ const fetchParticipantContacts = async (
   }
 
   return map;
-};
-
-const fetchGroupPhones = async (env: Env, groupId: string) => {
-  const statement = await env.DB.prepare(
-    `SELECT DISTINCT telefone
-     FROM convite
-     WHERE grupo_id = ?1
-       AND telefone IS NOT NULL
-       AND TRIM(telefone) != ''`
-  ).bind(groupId);
-
-  const result = await statement.all<{ telefone?: string | null }>();
-  return (result.results ?? [])
-    .map((row) => row.telefone?.trim())
-    .filter((value): value is string => Boolean(value));
 };
 
 const createNotification = async (
@@ -243,17 +212,6 @@ const buildGroupUrl = (env: Env, slug: string) => {
   } catch {
     return `${DEFAULT_SITE_URL.replace(/\/$/, "")}/app/grupo/${slug}`;
   }
-};
-
-const formatFriendlyDate = (value?: string | null) => {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
 };
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

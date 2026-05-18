@@ -6,6 +6,7 @@ import UpdateItem from '../../../components/UpdateItem.astro';
 import ActionButton from '../../../components/ActionButton.astro';
 import { computeInitials, renderMessageList } from '../../../utils/message-renderer';
 import { sendDrawCompletedEmail, sendInviteEmail } from '../../../shared/utils/email';
+import { sendInviteWhatsApp } from '../../../shared/utils/whatsapp-cloud';
 
 type FelizNatalEnv = {
 	DB: D1Database;
@@ -463,13 +464,20 @@ if (Astro.request.method === 'POST') {
 				return respondText('Convite não encontrado.', 404);
 			}
 
-			const inviteEmail = (inviteRow as { email?: string | null }).email?.trim();
+			const inviteEmail = (inviteRow as { email?: string | null }).email?.trim() || null;
+			const invitePhone = (inviteRow as { telefone?: string | null }).telefone?.trim() || null;
 			const inviteToken = (inviteRow as { token: string }).token;
 			const groupTitle = (grupoRow as { titulo: string }).titulo;
 			const inviteLink = new URL(
 				`/convite?token=${encodeURIComponent(inviteToken)}`,
 				Astro.url
 			).toString();
+
+			if (!inviteEmail && !invitePhone) {
+				return respondText('Este convite não possui e-mail ou telefone configurado.', 400);
+			}
+
+			let inviteSent = false;
 
 			if (inviteEmail) {
 				await sendInviteEmail(env, {
@@ -479,8 +487,21 @@ if (Astro.request.method === 'POST') {
 					inviterName: null,
 					groupOwner: viewerDisplayName
 				});
-			} else {
-				return respondText('Este convite não possui e-mail configurado.', 400);
+				inviteSent = true;
+			}
+
+			if (invitePhone) {
+				const whatsappSent = await sendInviteWhatsApp(env, {
+					to: invitePhone,
+					groupTitle,
+					inviteLink,
+					groupOwner: viewerDisplayName
+				});
+				inviteSent = inviteSent || whatsappSent;
+			}
+
+			if (!inviteSent) {
+				return respondText('Não foi possível reenviar o convite. Verifique as configurações de e-mail e WhatsApp.', 502);
 			}
 
 			await env.DB.prepare(`UPDATE convite SET enviado_em = ? WHERE id = ?`)

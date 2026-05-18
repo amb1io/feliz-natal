@@ -5,6 +5,7 @@ import {
   sendGroupCreatedEmail,
   sendInviteEmail
 } from '../../shared/utils/email';
+import { sendInviteWhatsApp } from '../../shared/utils/whatsapp-cloud';
 
 export const prerender = false;
 
@@ -49,21 +50,38 @@ const buildInviteLink = (token: string) =>
 
 const sendInviteSafely = async (
   email: string | null,
+  telefone: string | null,
   token: string,
   groupTitle: string,
   groupOwner: string | null
 ) => {
-  if (!email) return;
-  try {
-    await sendInviteEmail(env, {
-      to: email,
-      groupTitle,
-      inviteLink: buildInviteLink(token),
-      inviterName: null,
-      groupOwner
-    });
-  } catch (error) {
-    console.error('Erro ao enviar email de convite:', error);
+  const inviteLink = buildInviteLink(token);
+
+  if (email) {
+    try {
+      await sendInviteEmail(env, {
+        to: email,
+        groupTitle,
+        inviteLink,
+        inviterName: null,
+        groupOwner
+      });
+    } catch (error) {
+      console.error('Erro ao enviar email de convite:', error);
+    }
+  }
+
+  if (telefone) {
+    try {
+      await sendInviteWhatsApp(env, {
+        to: telefone,
+        groupTitle,
+        inviteLink,
+        groupOwner
+      });
+    } catch (error) {
+      console.error('Erro ao enviar WhatsApp de convite:', error);
+    }
   }
 };
 const sendGroupCreatedSafely = async (
@@ -372,8 +390,8 @@ if (!titulo || !dataSorteio) {
                 )
                 .run();
               conviteKeys.add(inviteKey);
-              if (email) {
-                await sendInviteSafely(email, inviteToken, titulo, organizerName);
+              if (email || telefone) {
+                await sendInviteSafely(email, telefone, inviteToken, titulo, organizerName);
               }
             }
           }
@@ -556,8 +574,8 @@ if (!titulo || !dataSorteio) {
           await insertConvite
             .bind(inviteId, grupoId, email, telefone, inviteToken, 'pendente', agora)
             .run();
-          if (email) {
-            await sendInviteSafely(email, inviteToken, titulo, organizerName);
+          if (email || telefone) {
+            await sendInviteSafely(email, telefone, inviteToken, titulo, organizerName);
           }
         }
 

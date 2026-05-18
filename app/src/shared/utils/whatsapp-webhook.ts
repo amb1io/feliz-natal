@@ -21,6 +21,29 @@ export type WhatsAppWebhookEvent = {
 	data: unknown;
 };
 
+export type WhatsAppMessageStatus = {
+	id?: string;
+	status?: string;
+	timestamp?: string;
+	recipient_id?: string;
+	conversation?: {
+		id?: string;
+		expiration_timestamp?: string;
+		origin?: { type?: string };
+	};
+	pricing?: {
+		billable?: boolean;
+		pricing_model?: string;
+		category?: string;
+	};
+	errors?: Array<{
+		code?: number;
+		title?: string;
+		message?: string;
+		error_data?: { details?: string };
+	}>;
+};
+
 const readEnvValue = (env: EnvSource, keys: string[]): string | undefined => {
 	for (const key of keys) {
 		const fromEnvObject = typeof env === 'object' && env !== null ? (env as Record<string, unknown>)[key] : undefined;
