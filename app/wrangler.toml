@@ -47,3 +47,10 @@ migrations_dir = "./migrations"
 [[kv_namespaces]]
 binding = "API_CACHE"
 id = "b657448077cc411f83c7bed0378e66dd"
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
