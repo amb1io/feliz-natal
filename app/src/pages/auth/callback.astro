@@ -11,7 +11,6 @@ const invitationStatePrefix = "invitation:";
 
 const env =
   Astro.locals.cloudflare?.env ??
-  Astro.locals.runtime?.env ??
   Astro.locals?.env ??
   null;
 

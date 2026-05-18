@@ -12,7 +12,6 @@ if (!session) {
 
 const env =
   Astro.locals.cloudflare?.env ??
-  Astro.locals.runtime?.env ??
   Astro.locals?.env;
 const PAGE_SIZE = 10;
 const requestedPage = Number.parseInt(

@@ -1,5 +1,4 @@
 import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
-import addedToGroupTemplate from "../../templates/email-added-to-group.html?raw";
 import drawCompletedTemplate from "../../templates/email-draw-completed.html?raw";
 import groupCreatedTemplate from "../../templates/email-group-created.html?raw";
 import inviteTemplate from "../../templates/email-invite.html?raw";
@@ -50,15 +49,6 @@ type GroupCreatedEmailOptions = {
   groupTitle: string;
   groupUrl: string;
   ownerName?: string | null;
-};
-
-type AddedToGroupEmailOptions = {
-  to: string;
-  groupTitle: string;
-  groupUrl: string;
-  inviteLink?: string | null;
-  participantName?: string | null;
-  groupOwner?: string | null;
 };
 
 type SecretMessageEmailOptions = {
@@ -341,35 +331,6 @@ export const sendGroupCreatedEmail = async (
   return sendEmail(env, {
     to: formatRecipientAddress(options.to, options.ownerName),
     subject: `✅ Grupo ${options.groupTitle} criado com sucesso`,
-    html,
-  });
-};
-
-const buildAddedToGroupEmail = ({
-  groupTitle,
-  groupUrl,
-  inviteLink,
-  participantName,
-  groupOwner,
-}: Omit<AddedToGroupEmailOptions, "to">) => {
-  return renderTemplate(addedToGroupTemplate, {
-    groupTitle,
-    greetingName: participantName ? ` ${participantName}` : "",
-    groupOwner: groupOwner ?? "Alguém",
-    accessLink: inviteLink ?? groupUrl,
-    accessLabel: inviteLink ? "Aceitar convite" : "Ver grupo",
-    headerImageUrl: resolveHeaderImageUrl(inviteLink ?? groupUrl)
-  });
-};
-
-export const sendAddedToGroupEmail = async (
-  env: EmailEnv | null | undefined,
-  options: AddedToGroupEmailOptions
-) => {
-  const html = buildAddedToGroupEmail(options);
-  return sendEmail(env, {
-    to: formatRecipientAddress(options.to, options.participantName),
-    subject: `🎄 Você foi adicionado ao grupo ${options.groupTitle}`,
     html,
   });
 };

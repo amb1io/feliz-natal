@@ -1,7 +1,6 @@
 name = "feliz-natal"
 compatibility_date = "2024-10-01"
 compatibility_flags = [ "nodejs_compat" ]
-pages_build_output_dir = "./dist"
 
 [vars]
 # Public/front-end/runtime configuration (safe to version)
@@ -32,6 +31,12 @@ WHATSAPP_SECRET_MESSAGE_TEMPLATE_COMPONENTS = "body_button"
 WHATSAPP_SECRET_MESSAGE_USE_NAMED_PARAMETERS = "false"
 WHATSAPP_SECRET_MESSAGE_INCLUDE_HEADER = "false"
 WHATSAPP_SECRET_MESSAGE_INCLUDE_BUTTON = "true"
+WHATSAPP_DRAW_TEMPLATE_NAME = "feliz_natal_sorteio_concluido"
+WHATSAPP_DRAW_TEMPLATE_LANG = "pt_BR"
+WHATSAPP_DRAW_TEMPLATE_COMPONENTS = "body_button"
+WHATSAPP_DRAW_USE_NAMED_PARAMETERS = "false"
+WHATSAPP_DRAW_INCLUDE_HEADER = "false"
+WHATSAPP_DRAW_INCLUDE_BUTTON = "true"
 
 [[d1_databases]]
 binding = "DB"
