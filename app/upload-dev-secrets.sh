@@ -113,7 +113,7 @@ while IFS= read -r raw_line || [[ -n "${raw_line}" ]]; do
   else
     echo "-> enviando segredo: ${key} (env: default)"
   fi
-  printf '%s' "${value}" | wrangler secret put "${key}" "${env_flag[@]}"
+  printf '%s' "${value}" | wrangler pages secret put "${key}" "${env_flag[@]}"
   uploaded=$((uploaded + 1))
 done < "${DEV_VARS_FILE}"
 
