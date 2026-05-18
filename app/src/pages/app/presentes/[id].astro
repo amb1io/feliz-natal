@@ -1,6 +1,7 @@
 ---
 import Layout from "../../../layouts/Layout.astro";
 import AppHeader from "../../../components/AppHeader.astro";
+import { getEnv } from "../../../server/request-context";
 
 export const prerender = false;
 
@@ -10,10 +11,7 @@ if (!sessionId) {
   return Astro.redirect("/app/");
 }
 
-const env =
-  Astro.locals.cloudflare?.env ??
-  Astro.locals?.env ??
-  null;
+const env = getEnv();
 
 const requestedUserId = Astro.params.id?.trim();
 if (!requestedUserId) {

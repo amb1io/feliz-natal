@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import type { D1Database } from '@cloudflare/workers-types';
+import { getEnv } from '../../../server/request-context';
 
 export const prerender = false;
 
@@ -10,23 +11,6 @@ const jsonResponse = (body: Record<string, unknown>, status = 200) =>
 			'Content-Type': 'application/json; charset=utf-8'
 		}
 	});
-
-type RuntimeEnv =
-	| {
-			DB?: D1Database;
-	  }
-	| null;
-
-const resolveEnv = (
-	locals:
-		| {
-				cloudflare?: { env?: RuntimeEnv };
-				runtime?: { env?: RuntimeEnv };
-				env?: RuntimeEnv;
-		  }
-		| null
-		| undefined
-) => locals?.cloudflare?.env ?? locals?.env ?? null;
 
 const slugify = (value: string) =>
 	value
@@ -82,8 +66,8 @@ const mapRecord = (record: Record<string, unknown>) => ({
 	url: (record.source as string) ?? ''
 });
 
-export const GET: APIRoute = async ({ locals, cookies }) => {
-	const env = resolveEnv(locals);
+export const GET: APIRoute = async ({ cookies }) => {
+	const env = getEnv();
 	const sessionId = cookies.get('felizNatalSession')?.value ?? null;
 
 	if (!env?.DB || !sessionId) {
@@ -109,8 +93,8 @@ export const GET: APIRoute = async ({ locals, cookies }) => {
 	}
 };
 
-export const POST: APIRoute = async ({ request, locals, cookies }) => {
-	const env = resolveEnv(locals);
+export const POST: APIRoute = async ({ request, cookies }) => {
+	const env = getEnv();
 	const sessionId = cookies.get('felizNatalSession')?.value ?? null;
 
 	if (!env?.DB || !sessionId) {

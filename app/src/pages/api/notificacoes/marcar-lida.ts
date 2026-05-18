@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { getEnv } from '../../../server/request-context';
 
 export const prerender = false;
 
@@ -8,8 +9,8 @@ const jsonResponse = (body: Record<string, unknown>, status = 200) =>
 		headers: { 'Content-Type': 'application/json; charset=utf-8' }
 	});
 
-export const POST: APIRoute = async ({ request, locals, cookies }) => {
-	const env = locals.cloudflare?.env ?? locals?.env ?? null;
+export const POST: APIRoute = async ({ request, cookies }) => {
+	const env = getEnv();
 	const sessionId = cookies.get('felizNatalSession')?.value ?? null;
 
 	if (!env?.DB || !sessionId) {

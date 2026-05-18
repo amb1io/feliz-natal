@@ -7,10 +7,9 @@ import {
 	validateSignature,
 	verifySubscription
 } from '../../../shared/utils/whatsapp-webhook';
+import { getEnv } from '../../../server/request-context';
 
 export const prerender = false;
-
-type RuntimeEnv = Record<string, unknown> | undefined;
 
 const textResponse = (body: string, status = 200) =>
 	new Response(body, {
@@ -53,19 +52,8 @@ const logMessageStatuses = (statuses: unknown) => {
 	}
 };
 
-const resolveEnv = (
-	locals:
-		| {
-				cloudflare?: { env?: RuntimeEnv };
-				runtime?: { env?: RuntimeEnv };
-				env?: RuntimeEnv;
-		  }
-		| null
-		| undefined
-) => locals?.cloudflare?.env ?? locals?.env ?? undefined;
-
-export const GET: APIRoute = async ({ request, locals }) => {
-	const config = buildWhatsAppWebhookConfig(resolveEnv(locals));
+export const GET: APIRoute = async ({ request }) => {
+	const config = buildWhatsAppWebhookConfig(getEnv());
 
 	if (!config.verifyToken) {
 		console.error('[whatsapp-webhook] WHATSAPP_VERIFY_TOKEN não configurado.');
@@ -81,8 +69,8 @@ export const GET: APIRoute = async ({ request, locals }) => {
 	return textResponse(challenge);
 };
 
-export const POST: APIRoute = async ({ request, locals }) => {
-	const config = buildWhatsAppWebhookConfig(resolveEnv(locals));
+export const POST: APIRoute = async ({ request }) => {
+	const config = buildWhatsAppWebhookConfig(getEnv());
 	const rawBody = await request.text();
 
 	if (config.appSecret) {

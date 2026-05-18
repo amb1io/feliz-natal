@@ -14,7 +14,7 @@ if (!sessionId) {
   return Astro.redirect("/app/");
 }
 
-const env = getEnv(Astro.locals);
+const env = getEnv();
 const url = new URL(Astro.request.url);
 const editingSlug = url.searchParams.get("grupo")?.trim() ?? null;
 

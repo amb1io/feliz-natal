@@ -12,7 +12,7 @@ import type { APIContext } from 'astro';
 
 export async function loadSlugPageContext(context: APIContext) {
 	const { Astro } = context;
-	const env = getEnv(Astro.locals);
+	const env = getEnv();
 	const userId = getSessionUserId(Astro.cookies);
 	const slug = Astro.params.slug;
 

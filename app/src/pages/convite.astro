@@ -7,13 +7,11 @@ import {
   hasCognitoConfig,
   resolveCognitoConfig,
 } from "../shared/utils/cognito-config";
+import { getEnv } from "../server/request-context";
 
 export const prerender = false;
 
-const env =
-  Astro.locals.cloudflare?.env ??
-  Astro.locals?.env ??
-  null;
+const env = getEnv();
 
 const session = Astro.cookies.get("felizNatalSession")?.value ?? null;
 

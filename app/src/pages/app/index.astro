@@ -10,7 +10,7 @@ import {
 
 export const prerender = false;
 
-const runtimeEnv = getEnv(Astro.locals);
+const runtimeEnv = getEnv();
 const cognitoConfig = resolveCognitoConfig(runtimeEnv);
 const socialProviders = buildCognitoSocialProviders(cognitoConfig);
 const disabledClasses = getCognitoDisabledClasses(cognitoConfig);
