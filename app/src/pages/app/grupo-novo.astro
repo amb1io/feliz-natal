@@ -64,6 +64,25 @@ const googleMapsKey = import.meta.env.PUBLIC_GOOGLE_MAPS_KEY ?? "";
           :disabled="isSubmitting"
           :class="isSubmitting ? 'pointer-events-none opacity-90' : ''"
         >
+        <section
+          class="space-y-4 bg-[var(--color-surface)] px-6 py-6 shadow-[0_12px_24px_rgba(109,76,65,0.1)]"
+        >
+          <label class="flex flex-col gap-2 text-left">
+            <span
+              class="text-sm font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+              >Nome do grupo</span
+            >
+            <input
+              type="text"
+              name="titulo"
+              required
+              x-model="form.name"
+              class="rounded-2xl border border-[var(--color-border)] bg-[rgba(255,209,102,0.25)] px-4 py-3 text-base text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+              placeholder="Ex.: Confraternização da empresa"
+            />
+          </label>
+        </section>
+
         <GroupFormSection title="Tipo dos presentes">
           <GiftTypePicker />
         </GroupFormSection>

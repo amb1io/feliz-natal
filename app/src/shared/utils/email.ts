@@ -1,4 +1,4 @@
-import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
+import { AwsClient } from "aws4fetch";
 import drawCompletedTemplate from "../../templates/email-draw-completed.html?raw";
 import groupCreatedTemplate from "../../templates/email-group-created.html?raw";
 import inviteTemplate from "../../templates/email-invite.html?raw";
@@ -197,29 +197,44 @@ export const sendEmail = async (
   }
 
   try {
-    const client = new SESv2Client({
+    const aws = new AwsClient({
+      accessKeyId: sesAccessKey,
+      secretAccessKey: sesSecretKey,
+      sessionToken: sesSessionToken ?? undefined,
       region: sesRegion,
-      credentials: {
-        accessKeyId: sesAccessKey,
-        secretAccessKey: sesSecretKey,
-        ...(sesSessionToken ? { sessionToken: sesSessionToken } : {})
-      }
+      service: "ses",
     });
-    const command = new SendEmailCommand({
-      FromEmailAddress: senderEmail,
-      Destination: {
-        ToAddresses: [extractEmailAddress(options.to)]
-      },
-      Content: {
-        Simple: {
-          Subject: { Data: options.subject, Charset: "UTF-8" },
-          Body: {
-            Html: { Data: options.html, Charset: "UTF-8" }
-          }
-        }
-      }
+
+    const endpoint = `https://email.${sesRegion}.amazonaws.com/v2/email/outbound-emails`;
+    const response = await aws.fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        FromEmailAddress: senderEmail,
+        Destination: {
+          ToAddresses: [extractEmailAddress(options.to)],
+        },
+        Content: {
+          Simple: {
+            Subject: { Data: options.subject, Charset: "UTF-8" },
+            Body: {
+              Html: { Data: options.html, Charset: "UTF-8" },
+            },
+          },
+        },
+      }),
     });
-    await client.send(command);
+
+    if (!response.ok) {
+      const detail = await response.text();
+      console.error(
+        "Falha ao enviar email via AWS SES:",
+        response.status,
+        detail || response.statusText
+      );
+      return false;
+    }
+
     return true;
   } catch (error) {
     console.error("Falha ao enviar email via AWS SES:", error);
