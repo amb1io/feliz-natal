@@ -6,6 +6,7 @@ const menuItems = [
   { label: "Criar Grupo", href: "/app/grupo-novo", variant: "primary" },
   { label: "Meus Grupos", href: "/app/grupos", variant: "default" },
   { label: "Lista de Desejos", href: "/app/presentes", variant: "default" },
+  { label: "Perfil", href: "/app/perfil", variant: "default" },
 ];
 
 const logout = () => {
@@ -78,12 +79,11 @@ const logout = () => {
           menuItems.map((item) => (
             <a
               href={item.href}
-              class={[
-                "inline-flex items-center gap-2 rounded-full px-4 py-2 font-medium scroll-fade",
+              class={`inline-flex min-w-40 items-center justify-center gap-2 rounded-full px-4 py-2 text-center font-medium scroll-fade ${
                 item.variant === "primary"
-                  ? "bg-[var(--color-primary)] text-[var(--color-primary-foreground)] "
-                  : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]",
-              ]}
+                  ? "bg-[var(--color-primary)] !text-white hover:!text-white visited:!text-white focus:!text-white"
+                  : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+              }`}
             >
               {item.label}
             </a>
@@ -143,12 +143,11 @@ const logout = () => {
           menuItems.map((item) => (
             <a
               href={item.href}
-              class={[
-                "inline-flex items-center gap-2 rounded-xl px-4 py-2 font-medium scroll-fade",
+              class={`inline-flex min-w-40 items-center justify-center gap-2 rounded-xl px-4 py-2 text-center font-medium scroll-fade ${
                 item.variant === "primary"
-                  ? "bg-[var(--color-primary)] text-[var(--color-primary-foreground)] shadow-[0_8px_16px_rgba(230,57,70,0.18)]"
-                  : "text-[var(--color-text-muted)] hover:text-[var(--color-text)] bg-[rgba(42,157,143,0.08)]",
-              ]}
+                  ? "bg-[var(--color-primary)] !text-white hover:!text-white visited:!text-white focus:!text-white shadow-[0_8px_16px_rgba(230,57,70,0.18)]"
+                  : "text-[var(--color-text-muted)] hover:text-[var(--color-text)] bg-[rgba(42,157,143,0.08)]"
+              }`}
               @click="mobileOpen = false"
             >
               {item.label}
