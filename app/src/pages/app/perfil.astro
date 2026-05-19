@@ -1,0 +1,413 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import AppHeader from "../../components/AppHeader.astro";
+import Footer from "../../components/Footer.astro";
+import { getEnv } from "../../server/request-context";
+import {
+  deleteAvatarFromBucket,
+  uploadAvatarToBucket,
+} from "../../server/avatar-bucket";
+
+export const prerender = false;
+
+const session = Astro.cookies.get("felizNatalSession");
+if (!session) {
+  return Astro.redirect("/app/");
+}
+
+const env = getEnv();
+
+type ProfileRow = {
+  id: string;
+  nome: string;
+  email: string;
+  telefone?: string | null;
+  avatar?: string | null;
+  login_campo?: string | null;
+};
+
+type LinkedAccountRow = {
+  provider: string;
+  provider_user_id: string;
+  email?: string | null;
+  telefone?: string | null;
+  linked_at?: string | null;
+  last_login_at?: string | null;
+};
+
+const providerLabel = (provider: string) => {
+  const normalized = provider.trim().toLowerCase();
+  if (normalized === "google") return "Google";
+  if (normalized === "facebook") return "Facebook";
+  if (normalized === "microsoft") return "Microsoft";
+  if (normalized === "slack") return "Slack";
+  return "Cognito";
+};
+
+const formatDate = (value?: string | null) => {
+  if (!value) return "Agora";
+  const dateValue = new Date(value);
+  if (Number.isNaN(dateValue.getTime())) return "Agora";
+  return dateValue.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+};
+
+let saveError: string | null = null;
+let saveSuccess: string | null = null;
+
+let profile: ProfileRow | null = null;
+let linkedAccounts: LinkedAccountRow[] = [];
+let hasPhoneColumn = false;
+let hasLoginFieldColumn = false;
+let hasLinkedAccountsTable = false;
+
+if (!env?.DB) {
+  saveError = "Banco de dados indisponível no momento.";
+} else {
+  try {
+    const userColumnsResult = await env.DB.prepare('PRAGMA table_info("usuario")').all();
+    const userColumnNames = new Set(
+      (userColumnsResult?.results ?? [])
+        .map((row: unknown) => ((row as { name?: string }).name ?? "").toString().trim())
+        .filter((name: string) => name.length > 0)
+    );
+    hasPhoneColumn = userColumnNames.has("telefone");
+    hasLoginFieldColumn = userColumnNames.has("login_campo");
+
+    const linkedTableResult = await env.DB
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'usuario_conta_linkada' LIMIT 1"
+      )
+      .first();
+    hasLinkedAccountsTable = Boolean(linkedTableResult);
+
+    const foundProfile = await env.DB
+      .prepare(
+        hasPhoneColumn && hasLoginFieldColumn
+          ? "SELECT id, nome, email, telefone, avatar, login_campo FROM usuario WHERE id = ? LIMIT 1"
+          : "SELECT id, nome, email, avatar FROM usuario WHERE id = ? LIMIT 1"
+      )
+      .bind(session.value)
+      .first();
+    if (!foundProfile) {
+      return Astro.redirect("/app/");
+    }
+    profile = foundProfile as ProfileRow;
+  } catch (error) {
+    console.error("Erro ao carregar perfil do usuário:", error);
+    saveError = "Não foi possível carregar seus dados agora.";
+  }
+}
+
+if (Astro.request.method === "POST" && env?.DB && profile) {
+  const formData = await Astro.request.formData();
+  const nomeRaw = formData.get("nome");
+  const emailRaw = formData.get("email");
+  const telefoneRaw = formData.get("telefone");
+  const avatarRaw = formData.get("avatar");
+  const removeAvatar = formData.get("remove_avatar") === "1";
+
+  const nome = typeof nomeRaw === "string" ? nomeRaw.trim() : "";
+  const email = typeof emailRaw === "string" ? emailRaw.trim() : "";
+  const telefone = typeof telefoneRaw === "string" ? telefoneRaw.trim() : "";
+
+  const loginField = hasLoginFieldColumn
+    ? (profile.login_campo ?? "email").toLowerCase()
+    : "email";
+  const nextEmail = loginField === "email" ? profile.email : email;
+  const nextPhone = loginField === "telefone" ? profile.telefone ?? "" : telefone;
+
+  if (!nome) {
+    saveError = "Informe seu nome para atualizar o perfil.";
+  } else if (!nextEmail) {
+    saveError = "Informe um e-mail válido.";
+  } else {
+    let nextAvatar = profile.avatar ?? null;
+    const previousAvatar = profile.avatar ?? null;
+    let newUploadedAvatarUrl: string | null = null;
+    let shouldDeletePreviousAvatar = false;
+
+    if (removeAvatar) {
+      nextAvatar = null;
+      shouldDeletePreviousAvatar = Boolean(previousAvatar);
+    } else if (avatarRaw instanceof File && avatarRaw.size > 0) {
+      const isImage = avatarRaw.type.startsWith("image/");
+      if (!isImage) {
+        saveError = "Selecione um arquivo de imagem válido para o avatar.";
+      } else {
+        try {
+          newUploadedAvatarUrl = await uploadAvatarToBucket(env, avatarRaw, profile.id);
+          nextAvatar = newUploadedAvatarUrl;
+          shouldDeletePreviousAvatar = Boolean(previousAvatar && previousAvatar !== nextAvatar);
+        } catch (error) {
+          console.error("Erro ao enviar avatar para bucket:", error);
+          saveError = error instanceof Error ? error.message : "Não foi possível enviar seu avatar.";
+        }
+      }
+    }
+
+    if (!saveError) {
+      try {
+        if (hasPhoneColumn) {
+          await env.DB
+            .prepare(
+              "UPDATE usuario SET nome = ?, email = ?, telefone = ?, avatar = ? WHERE id = ?"
+            )
+            .bind(nome, nextEmail, nextPhone || null, nextAvatar, profile.id)
+            .run();
+        } else {
+          await env.DB
+            .prepare("UPDATE usuario SET nome = ?, email = ?, avatar = ? WHERE id = ?")
+            .bind(nome, nextEmail, nextAvatar, profile.id)
+            .run();
+        }
+
+        profile = {
+          ...profile,
+          nome,
+          email: nextEmail,
+          telefone: nextPhone || null,
+          avatar: nextAvatar,
+        };
+
+        if (shouldDeletePreviousAvatar) {
+          await deleteAvatarFromBucket(env, previousAvatar).catch((cleanupError) => {
+            console.warn("Não foi possível remover avatar antigo do bucket:", cleanupError);
+          });
+        }
+
+        saveSuccess = "Perfil atualizado com sucesso.";
+      } catch (error) {
+        console.error("Erro ao salvar perfil do usuário:", error);
+        if (newUploadedAvatarUrl) {
+          await deleteAvatarFromBucket(env, newUploadedAvatarUrl).catch((cleanupError) => {
+            console.warn("Não foi possível limpar avatar recém enviado após falha no banco:", cleanupError);
+          });
+        }
+        saveError = "Não foi possível salvar seu perfil agora.";
+      }
+    }
+  }
+}
+
+if (env?.DB && profile && hasLinkedAccountsTable) {
+  try {
+    const linkedResult = await env.DB
+      .prepare(
+        `SELECT provider, provider_user_id, email, telefone, linked_at, last_login_at
+           FROM usuario_conta_linkada
+          WHERE usuario_id = ?
+          ORDER BY datetime(last_login_at) DESC, datetime(linked_at) DESC`
+      )
+      .bind(profile.id)
+      .all();
+    linkedAccounts = (linkedResult?.results ?? []) as LinkedAccountRow[];
+  } catch (error) {
+    console.warn("Não foi possível carregar contas linkadas:", error);
+  }
+}
+
+const loginField = (profile?.login_campo ?? "email").toLowerCase();
+const isEmailLocked = hasLoginFieldColumn && loginField === "email";
+const isPhoneLocked = hasLoginFieldColumn && loginField === "telefone";
+---
+
+<Layout>
+  <div class="min-h-screen bg-transparent flex flex-col">
+    <AppHeader />
+
+    <main class="flex-1 mx-auto w-full max-w-4xl space-y-8 px-6 py-10">
+      <header class="space-y-2">
+        <h1 class="text-3xl font-semibold text-[var(--color-text)]">Perfil</h1>
+        <p class="text-sm text-[var(--color-text-muted)]">
+          Atualize seus dados e gerencie as contas vinculadas.
+        </p>
+      </header>
+
+      <section class="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[0_12px_26px_rgba(109,76,65,0.1)]">
+        <form
+          method="POST"
+          enctype="multipart/form-data"
+          class="space-y-6"
+          data-profile-form
+        >
+          <div class="flex flex-col gap-4 md:flex-row md:items-center">
+            <div class="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border border-[var(--color-border)] bg-[rgba(42,157,143,0.1)]">
+              {
+                profile?.avatar ? (
+                  <img
+                    src={profile.avatar}
+                    alt="Avatar do usuário"
+                    class="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span class="text-xl font-semibold text-[var(--color-text-muted)]">
+                    {(profile?.nome ?? "U").slice(0, 1).toUpperCase()}
+                  </span>
+                )
+              }
+            </div>
+
+            <div class="flex-1 space-y-2">
+              <label class="block text-sm font-medium text-[var(--color-text)]" for="avatar">
+                Avatar
+              </label>
+              <input
+                id="avatar"
+                name="avatar"
+                type="file"
+                accept="image/*"
+                class="block w-full rounded-xl border border-[var(--color-border)] bg-transparent px-3 py-2 text-sm text-[var(--color-text)]"
+              />
+              {profile?.avatar && (
+                <label class="inline-flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+                  <input type="checkbox" name="remove_avatar" value="1" />
+                  Remover avatar atual
+                </label>
+              )}
+            </div>
+          </div>
+
+          <div class="grid gap-4 md:grid-cols-2">
+            <label class="space-y-2">
+              <span class="text-sm font-medium text-[var(--color-text)]">Nome</span>
+              <input
+                type="text"
+                name="nome"
+                value={profile?.nome ?? ""}
+                required
+                class="w-full rounded-xl border border-[var(--color-border)] bg-transparent px-4 py-2.5 text-sm text-[var(--color-text)]"
+              />
+            </label>
+
+            <label class="space-y-2">
+              <span class="text-sm font-medium text-[var(--color-text)]">Email</span>
+              <input
+                type="email"
+                name="email"
+                value={profile?.email ?? ""}
+                disabled={isEmailLocked}
+                class="w-full rounded-xl border border-[var(--color-border)] bg-transparent px-4 py-2.5 text-sm text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-70"
+              />
+            </label>
+
+            <label class="space-y-2 md:col-span-2">
+              <span class="text-sm font-medium text-[var(--color-text)]">Telefone</span>
+              <input
+                type="tel"
+                name="telefone"
+                value={profile?.telefone ?? ""}
+                disabled={isPhoneLocked}
+                placeholder="+55 (11) 99999-0000"
+                class="w-full rounded-xl border border-[var(--color-border)] bg-transparent px-4 py-2.5 text-sm text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-70"
+              />
+            </label>
+          </div>
+
+          {isEmailLocked && (
+            <p class="text-xs text-[var(--color-text-muted)]">
+              Seu e-mail foi usado no login e está bloqueado para edição.
+            </p>
+          )}
+          {isPhoneLocked && (
+            <p class="text-xs text-[var(--color-text-muted)]">
+              Seu telefone foi usado no login e está bloqueado para edição.
+            </p>
+          )}
+
+          {saveError && (
+            <p class="rounded-xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-sm text-red-700">
+              {saveError}
+            </p>
+          )}
+          {saveSuccess && (
+            <p class="rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700">
+              {saveSuccess}
+            </p>
+          )}
+
+          <div>
+            <button
+              type="submit"
+              class="scroll-fade inline-flex min-w-44 items-center justify-center gap-2 rounded-full bg-[var(--color-primary)] px-6 py-3 text-sm font-semibold text-[var(--color-primary-foreground)] disabled:cursor-not-allowed disabled:opacity-70"
+              data-profile-submit
+            >
+              <span data-profile-submit-label>Salvar perfil</span>
+              <span data-profile-submit-loading class="hidden items-center gap-2">
+                <img
+                  src="data:image/gif;base64,R0lGODlhEAAQAPIAAP///wAAAMLCwkJCQv///wAAAAAAAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQJCgAAACwAAAAAEAAQAAADMwi63P4wyklrE2MIOggZnAdOmGYJRbExwroUmrYxwG0xvdcPjH8kxIAIfkECQoAAAAsAAAAABAAEAAAAzMIutz+MMpJaxtDCCoIGZwHTphmCUWxMcK6FJq2McBtMb3XD4x/JMSACH5BAkKAAAALAAAAAAQABAAAAMzCLrc/jDKSWsbQwgqCBmcB06YZglFsTHCuhSatjHAbTG91w+MfyTEgAAh+QQJCgAAACwAAAAAEAAQAAADMwi63P4wyklrE2MIOggZnAdOmGYJRbExwroUmrYxwG0xvdcPjH8kxIAOw=="
+                  alt="Carregando"
+                  class="h-4 w-4 rounded-full"
+                />
+                <span>salvando perfil</span>
+              </span>
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[0_12px_26px_rgba(109,76,65,0.1)]">
+        <h2 class="text-xl font-semibold text-[var(--color-text)]">
+          Contas linkada a este perfil
+        </h2>
+        <p class="mt-1 text-sm text-[var(--color-text-muted)]">
+          Abaixo estão os provedores que já autenticaram esta conta.
+        </p>
+
+        <div class="mt-5 space-y-3">
+          {
+            linkedAccounts.length ? (
+              linkedAccounts.map((account) => (
+                <article class="rounded-2xl border border-[var(--color-border)] px-4 py-3">
+                  <div class="flex items-center justify-between">
+                    <p class="font-medium text-[var(--color-text)]">
+                      {providerLabel(account.provider)}
+                    </p>
+                    <span class="text-xs text-[var(--color-text-muted)]">
+                      Último login: {formatDate(account.last_login_at)}
+                    </span>
+                  </div>
+                  <p class="mt-1 text-xs text-[var(--color-text-muted)]">
+                    ID: {account.provider_user_id}
+                  </p>
+                  {(account.email || account.telefone) && (
+                    <p class="mt-1 text-xs text-[var(--color-text-muted)]">
+                      {account.email ? `Email: ${account.email}` : `Telefone: ${account.telefone}`}
+                    </p>
+                  )}
+                </article>
+              ))
+            ) : (
+              <p class="rounded-2xl border border-dashed border-[var(--color-border)] px-4 py-6 text-sm text-[var(--color-text-muted)]">
+                Nenhuma conta vinculada encontrada ainda.
+              </p>
+            )
+          }
+        </div>
+      </section>
+    </main>
+
+    <Footer />
+  </div>
+
+  <script>
+    if (typeof window !== "undefined") {
+      const form = document.querySelector("[data-profile-form]");
+      const submitButton = document.querySelector("[data-profile-submit]");
+      const defaultLabel = document.querySelector("[data-profile-submit-label]");
+      const loadingLabel = document.querySelector("[data-profile-submit-loading]");
+
+      if (form instanceof HTMLFormElement && submitButton instanceof HTMLButtonElement) {
+        form.addEventListener("submit", () => {
+          submitButton.disabled = true;
+          defaultLabel?.classList.add("hidden");
+          loadingLabel?.classList.remove("hidden");
+          loadingLabel?.classList.add("inline-flex");
+        });
+      }
+    }
+  </script>
+</Layout>

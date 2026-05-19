@@ -46,6 +46,70 @@ const decodeJwtPayload = (token: string) => {
   return JSON.parse(json) as Record<string, unknown>;
 };
 
+type LinkedAccount = {
+  provider: string;
+  providerUserId: string;
+};
+
+const normalizeProvider = (value?: string | null) => {
+  const normalized = value?.trim().toLowerCase() ?? "";
+  if (!normalized) return "cognito";
+  if (normalized === "google") return "google";
+  if (normalized === "facebook") return "facebook";
+  if (normalized === "slack") return "slack";
+  if (normalized === "microsoft") return "microsoft";
+  return normalized;
+};
+
+const parseLinkedAccounts = (claims: Record<string, unknown>): LinkedAccount[] => {
+  const rawIdentities = claims.identities;
+  const accounts: LinkedAccount[] = [];
+
+  if (typeof rawIdentities === "string" && rawIdentities.trim()) {
+    try {
+      const parsed = JSON.parse(rawIdentities) as Array<Record<string, unknown>>;
+      for (const identity of parsed) {
+        const provider = normalizeProvider(
+          typeof identity.providerName === "string" ? identity.providerName : null
+        );
+        const providerUserId =
+          typeof identity.userId === "string" && identity.userId.trim()
+            ? identity.userId.trim()
+            : "unknown";
+        accounts.push({ provider, providerUserId });
+      }
+    } catch (error) {
+      console.warn("Não foi possível interpretar o claim identities.", error);
+    }
+  }
+
+  const cognitoUsername =
+    typeof claims["cognito:username"] === "string"
+      ? claims["cognito:username"].trim()
+      : "";
+  if (accounts.length === 0 && cognitoUsername.length > 0) {
+    const separatorIndex = cognitoUsername.indexOf("_");
+    if (separatorIndex > 0) {
+      const provider = normalizeProvider(cognitoUsername.slice(0, separatorIndex));
+      const providerUserId =
+        cognitoUsername.slice(separatorIndex + 1).trim() || "unknown";
+      accounts.push({ provider, providerUserId });
+    } else {
+      accounts.push({ provider: "cognito", providerUserId: cognitoUsername });
+    }
+  }
+
+  if (accounts.length === 0) {
+    accounts.push({
+      provider: "cognito",
+      providerUserId:
+        typeof claims.sub === "string" && claims.sub.trim() ? claims.sub.trim() : "unknown",
+    });
+  }
+
+  return accounts;
+};
+
 const params = new URL(Astro.request.url).searchParams;
 const code = params.get("code");
 const errorParam = params.get("error");
@@ -137,6 +201,13 @@ if (errorParam) {
       (claims.email as string | undefined) ??
       (claims.preferred_username as string | undefined) ??
       null;
+    const rawPhone =
+      typeof claims.phone_number === "string" ? claims.phone_number.trim() : null;
+    const loginField: "email" | "telefone" | "desconhecido" = rawEmail
+      ? "email"
+      : rawPhone
+        ? "telefone"
+        : "desconhecido";
     const fallbackEmail = `${userId}@placeholder.local`;
     const userEmail = rawEmail?.trim() || fallbackEmail;
 
@@ -165,9 +236,28 @@ if (errorParam) {
 
     if (env?.DB) {
       const db = env.DB;
+      const linkedAccounts = parseLinkedAccounts(claims);
+      const userColumnsResult = await db.prepare('PRAGMA table_info("usuario")').all();
+      const userColumnNames = new Set(
+        (userColumnsResult?.results ?? [])
+          .map((row: unknown) => ((row as { name?: string }).name ?? "").toString().trim())
+          .filter((name: string) => name.length > 0)
+      );
+      const hasPhoneColumn = userColumnNames.has("telefone");
+      const hasLoginFieldColumn = userColumnNames.has("login_campo");
+      const linkedAccountsTableResult = await db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'usuario_conta_linkada' LIMIT 1"
+        )
+        .first();
+      const hasLinkedAccountsTable = Boolean(linkedAccountsTableResult);
 
       const existingById = await db
-        .prepare("SELECT id, email FROM usuario WHERE id = ? LIMIT 1")
+        .prepare(
+          hasPhoneColumn
+            ? "SELECT id, email, telefone FROM usuario WHERE id = ? LIMIT 1"
+            : "SELECT id, email FROM usuario WHERE id = ? LIMIT 1"
+        )
         .bind(userId)
         .first();
 
@@ -176,10 +266,29 @@ if (errorParam) {
           ((existingById as { email?: string | null }).email ?? undefined)
             ?.toString()
             .trim() || userEmail;
-        await db
-          .prepare("UPDATE usuario SET nome = ?, email = ? WHERE id = ?")
-          .bind(resolvedName, rawEmail ? userEmail : currentEmail, userId)
-          .run();
+        const currentPhone =
+          ((existingById as { telefone?: string | null }).telefone ?? undefined)
+            ?.toString()
+            .trim() || null;
+        if (hasPhoneColumn && hasLoginFieldColumn) {
+          await db
+            .prepare(
+              "UPDATE usuario SET nome = ?, email = ?, telefone = ?, login_campo = ? WHERE id = ?"
+            )
+            .bind(
+              resolvedName,
+              rawEmail ? userEmail : currentEmail,
+              rawPhone || currentPhone,
+              loginField,
+              userId
+            )
+            .run();
+        } else {
+          await db
+            .prepare("UPDATE usuario SET nome = ?, email = ? WHERE id = ?")
+            .bind(resolvedName, rawEmail ? userEmail : currentEmail, userId)
+            .run();
+        }
       } else if (rawEmail) {
         const existingByEmail = await db
           .prepare("SELECT id FROM usuario WHERE email = ? LIMIT 1")
@@ -187,35 +296,95 @@ if (errorParam) {
           .first();
 
         if (existingByEmail?.id && existingByEmail.id !== userId) {
-          await db
-            .prepare(
-              "UPDATE usuario SET id = ?, nome = ?, email = ?, criado_em = COALESCE(criado_em, ?) WHERE id = ?"
-            )
-            .bind(
-              userId,
-              resolvedName,
-              userEmail,
-              agora,
-              existingByEmail.id as string
-            )
-            .run();
+          if (hasPhoneColumn && hasLoginFieldColumn) {
+            await db
+              .prepare(
+                "UPDATE usuario SET id = ?, nome = ?, email = ?, telefone = ?, login_campo = ?, criado_em = COALESCE(criado_em, ?) WHERE id = ?"
+              )
+              .bind(
+                userId,
+                resolvedName,
+                userEmail,
+                rawPhone,
+                loginField,
+                agora,
+                existingByEmail.id as string
+              )
+              .run();
+          } else {
+            await db
+              .prepare(
+                "UPDATE usuario SET id = ?, nome = ?, email = ?, criado_em = COALESCE(criado_em, ?) WHERE id = ?"
+              )
+              .bind(userId, resolvedName, userEmail, agora, existingByEmail.id as string)
+              .run();
+          }
           welcomeEmailTarget = userEmail;
         } else {
-          await db
-            .prepare(
-              "INSERT INTO usuario (id, nome, email, criado_em) VALUES (?, ?, ?, ?)"
-            )
-            .bind(userId, resolvedName, userEmail, agora)
-            .run();
+          if (hasPhoneColumn && hasLoginFieldColumn) {
+            await db
+              .prepare(
+                "INSERT INTO usuario (id, nome, email, telefone, login_campo, criado_em) VALUES (?, ?, ?, ?, ?, ?)"
+              )
+              .bind(userId, resolvedName, userEmail, rawPhone, loginField, agora)
+              .run();
+          } else {
+            await db
+              .prepare("INSERT INTO usuario (id, nome, email, criado_em) VALUES (?, ?, ?, ?)")
+              .bind(userId, resolvedName, userEmail, agora)
+              .run();
+          }
           welcomeEmailTarget = userEmail;
         }
       } else {
-        await db
-          .prepare(
-            "INSERT INTO usuario (id, nome, email, criado_em) VALUES (?, ?, ?, ?)"
-          )
-          .bind(userId, resolvedName, userEmail, agora)
-          .run();
+        if (hasPhoneColumn && hasLoginFieldColumn) {
+          await db
+            .prepare(
+              "INSERT INTO usuario (id, nome, email, telefone, login_campo, criado_em) VALUES (?, ?, ?, ?, ?, ?)"
+            )
+            .bind(userId, resolvedName, userEmail, rawPhone, loginField, agora)
+            .run();
+        } else {
+          await db
+            .prepare("INSERT INTO usuario (id, nome, email, criado_em) VALUES (?, ?, ?, ?)")
+            .bind(userId, resolvedName, userEmail, agora)
+            .run();
+        }
+      }
+
+      if (hasLinkedAccountsTable) {
+        for (const account of linkedAccounts) {
+          try {
+            await db
+              .prepare(
+                `INSERT INTO usuario_conta_linkada (
+                    usuario_id,
+                    provider,
+                    provider_user_id,
+                    email,
+                    telefone,
+                    linked_at,
+                    last_login_at
+                  ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                  ON CONFLICT(usuario_id, provider, provider_user_id) DO UPDATE SET
+                    email = excluded.email,
+                    telefone = excluded.telefone,
+                    last_login_at = excluded.last_login_at`
+              )
+              .bind(
+                userId,
+                account.provider,
+                account.providerUserId,
+                rawEmail ? userEmail : null,
+                rawPhone,
+                agora,
+                agora
+              )
+              .run();
+          } catch (error) {
+            console.warn("Não foi possível atualizar conta social vinculada:", error);
+          }
+        }
       }
     } else {
       console.warn("DB não configurado; usuário não foi persistido.");
@@ -223,7 +392,7 @@ if (errorParam) {
 
     if (welcomeEmailTarget) {
       const dashboardUrl = new URL(painelRedirect, Astro.url).toString();
-      await sendWelcomeEmail(env, {
+      await sendWelcomeEmail(env as Parameters<typeof sendWelcomeEmail>[0], {
         to: welcomeEmailTarget,
         name: resolvedName,
         dashboardUrl,
@@ -234,7 +403,7 @@ if (errorParam) {
     Astro.cookies.set("felizNatalSession", userId, {
       path: "/",
       maxAge: 60 * 60,
-      sameSite: "Lax",
+      sameSite: "lax",
       secure: requestUrl.protocol === "https:",
       httpOnly: false,
     });

@@ -33,6 +33,9 @@ export type SendDrawCompletedWhatsAppOptions = {
 	to: string;
 	groupTitle: string;
 	groupUrl: string;
+	recipientName?: string | null;
+	revealDate?: string | null;
+	revealLocation?: string | null;
 };
 
 type TemplateComponentsMode = 'none' | 'body' | 'header_body' | 'body_button';
@@ -301,7 +304,14 @@ const buildDrawCompletedTemplateComponents = (
 		return undefined;
 	}
 
-	const title = options.groupTitle.trim() || 'Amigo secreto';
+	const recipientName = options.recipientName?.trim() || 'Participante';
+	const revealDateRaw = options.revealDate?.trim() ?? '';
+	const revealDateValue = revealDateRaw ? new Date(revealDateRaw) : null;
+	const revealDate =
+		revealDateValue && !Number.isNaN(revealDateValue.getTime())
+			? revealDateValue.toLocaleDateString('pt-BR', { dateStyle: 'long' })
+			: 'Data a confirmar';
+	const revealLocation = options.revealLocation?.trim() || options.groupUrl;
 	const components: TemplateComponent[] = [];
 
 	const shouldIncludeHeader =
@@ -314,9 +324,11 @@ const buildDrawCompletedTemplateComponents = (
 		});
 	}
 
-	const bodyParameters: TemplateParameter[] = config.useNamedParameters
-		? [buildTextParameter(title, 'nome_do_grupo')]
-		: [buildTextParameter(title)];
+	const bodyParameters: TemplateParameter[] = [
+		buildTextParameter(recipientName, 'nome_da_pessoa'),
+		buildTextParameter(revealDate, 'data_revelacao'),
+		buildTextParameter(revealLocation, 'local_revelacao')
+	];
 
 	components.push({
 		type: 'body',

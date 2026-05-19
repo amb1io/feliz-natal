@@ -212,6 +212,7 @@ async function handleDraw(
 		const groupTitle = ctx.grupoRow.titulo;
 		const groupSlug = ctx.grupoRow.slug;
 		const revealDateValue = ctx.grupoRow.data_revelacao ?? null;
+		const revealLocationValue = ctx.grupoRow.localizacao_nome ?? ctx.grupoRow.localizacao ?? null;
 		const groupUrl = new URL(`/app/grupo/${groupSlug}`, ctx.url).toString();
 
 		const notificationPromises: Array<Promise<void>> = [];
@@ -285,11 +286,17 @@ async function handleDraw(
 				);
 			}
 			if (contact?.telefone) {
+				const displayName =
+					contact.nome?.trim() ||
+					(contact.email.includes('@') ? contact.email.split('@')[0] ?? null : null);
 				whatsappPromises.push(
 					sendDrawCompletedWhatsApp(ctx.env, {
 						to: contact.telefone,
 						groupTitle,
-						groupUrl
+						groupUrl,
+						recipientName: displayName,
+						revealDate: revealDateValue,
+						revealLocation: revealLocationValue
 					})
 				);
 			}

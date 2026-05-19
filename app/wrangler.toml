@@ -32,12 +32,14 @@ WHATSAPP_SECRET_MESSAGE_TEMPLATE_COMPONENTS = "body_button"
 WHATSAPP_SECRET_MESSAGE_USE_NAMED_PARAMETERS = "false"
 WHATSAPP_SECRET_MESSAGE_INCLUDE_HEADER = "false"
 WHATSAPP_SECRET_MESSAGE_INCLUDE_BUTTON = "true"
-WHATSAPP_DRAW_TEMPLATE_NAME = "feliz_natal_sorteio_concluido"
+WHATSAPP_DRAW_TEMPLATE_NAME = "feliz_natal_sorteio_realizado"
 WHATSAPP_DRAW_TEMPLATE_LANG = "pt_BR"
 WHATSAPP_DRAW_TEMPLATE_COMPONENTS = "body_button"
 WHATSAPP_DRAW_USE_NAMED_PARAMETERS = "false"
 WHATSAPP_DRAW_INCLUDE_HEADER = "false"
 WHATSAPP_DRAW_INCLUDE_BUTTON = "true"
+# Avatar storage
+AVATAR_PUBLIC_BASE_URL = "https://cdn.feliz.natal.br"
 
 [[d1_databases]]
 binding = "DB"
@@ -56,6 +58,10 @@ new_sqlite_classes = ["PresentesDurableObject"]
 [[kv_namespaces]]
 binding = "API_CACHE"
 id = "b657448077cc411f83c7bed0378e66dd"
+
+[[r2_buckets]]
+binding = "AVATARS_BUCKET"
+bucket_name = "feliz-natal-avatars"
 
 [observability]
 enabled = false
