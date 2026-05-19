@@ -1,7 +1,11 @@
 import { computeInitials, renderMessageList } from '../utils/message-renderer';
 import { formatDateValue, toDateValue } from '../utils/date';
 import { buildBudgetDescription, buildDisplayLocation } from '../utils/group-display';
-import { countAcceptedInvites, findPendingInvites } from './repositories/invite-repository';
+import {
+	countAcceptedInvites,
+	findGroupInvitesTimeline,
+	findPendingInvites
+} from './repositories/invite-repository';
 import { findGroupMessages, findSecretMessages } from './repositories/message-repository';
 import {
 	findLatestDraw,
@@ -87,8 +91,7 @@ export async function loadGroupPageData(
 	const rawRevealDateValue = grupoRow.data_revelacao ?? null;
 	const drawDate = formatDateValue(rawDrawDateValue);
 	const revealDate = formatDateValue(rawRevealDateValue);
-	const drawDateTimestamp = toDateValue(rawDrawDateValue);
-	const revealDateTimestamp = toDateValue(rawRevealDateValue);
+	const groupCreatedTimestamp = toDateValue(grupoRow.criado_em ?? null);
 	const budgetDescription = buildBudgetDescription(grupoRow);
 	const participantCount = participantsList.length;
 	const displayLocation = buildDisplayLocation(grupoRow);
@@ -273,64 +276,96 @@ export async function loadGroupPageData(
 	const drawerInitials = !isGroupActive && yourDrawerName ? computeInitials(yourDrawerName) : '??';
 	const drawerDisplay = !isGroupActive && yourDrawerName ? yourDrawerName : '???';
 
-	let latestParticipantName: string | null = null;
-	let latestParticipantDate: Date | null = null;
-	for (let index = participantRecords.length - 1; index >= 0; index -= 1) {
-		const record = participantRecords[index];
-		if (record.usuario_id !== userId) {
-			latestParticipantName = record.nome;
-			latestParticipantDate = toDateValue(record.criado_em ?? null);
-			break;
+	const giftThemeLabelByValue: Record<string, string> = {
+		onca: 'Amigo da Onça',
+		tradicional: 'Amigo Tradicional',
+		ladrao: 'Amigo Ladrão'
+	};
+	const normalizedGiftTheme = giftTheme?.trim().toLowerCase() ?? '';
+	const themeLabel = giftTheme
+		? (giftThemeLabelByValue[normalizedGiftTheme] ?? giftTheme)
+		: 'Tema não definido';
+
+	const inviteTimelineRows = await findGroupInvitesTimeline(env.DB, groupId);
+	const inviteTimelineEvents = inviteTimelineRows.flatMap((invite) => {
+		const contact = invite.email?.trim() || invite.telefone?.trim() || 'contato não informado';
+		const events: Array<{ icon: string; message: string; date: Date | null; order: number }> = [];
+
+		const sentTimestamp = toDateValue(invite.enviado_em ?? invite.criado_em ?? null);
+		const sentDateLabel = sentTimestamp ? formatDateValue(sentTimestamp.toISOString()) : null;
+		events.push({
+			icon: '✉️',
+			message: sentDateLabel
+				? `Convite enviado para ${contact} em ${sentDateLabel}.`
+				: `Convite enviado para ${contact}.`,
+			date: sentTimestamp,
+			order: 10
+		});
+
+		const acceptedTimestamp = toDateValue(invite.aceito_em ?? null);
+		if (acceptedTimestamp) {
+			const acceptedDateLabel = formatDateValue(acceptedTimestamp.toISOString()) ?? 'data desconhecida';
+			events.push({
+				icon: '✅',
+				message: `Convite aceito por ${contact} em ${acceptedDateLabel}.`,
+				date: acceptedTimestamp,
+				order: 11
+			});
 		}
-	}
+
+		return events;
+	});
 
 	const timelineEventsRaw: Array<{ icon: string; message: string; date: Date | null; order: number }> = [
+		...inviteTimelineEvents,
 		{
-			icon: '📍',
-			message: displayLocation ? `Encontro planejado em ${displayLocation}.` : 'Encontro ainda sem local definido.',
-			date: null,
+			icon: '📆',
+			message: revealDate
+				? `Data da revelação definida para ${revealDate}.`
+				: 'Data da revelação ainda não definida.',
+			date: groupCreatedTimestamp,
 			order: 0
 		},
 		{
-			icon: '🧑‍🤝‍🧑',
-			message: participantCount
-				? `${participantCount} participante(s) adicionados.`
-				: 'Nenhum participante adicionado ainda.',
-			date: latestParticipantDate,
+			icon: '🎲',
+			message: drawDate ? `Data do sorteio definida para ${drawDate}.` : 'Data do sorteio ainda não definida.',
+			date: groupCreatedTimestamp,
 			order: 1
+		},
+		{
+			icon: '🧑‍🤝‍🧑',
+			message: `${participantCount} participante(s) adicionado(s) ao grupo.`,
+			date: groupCreatedTimestamp,
+			order: 2
+		},
+		{
+			icon: '📍',
+			message: displayLocation
+				? `Endereço/local da revelação: ${displayLocation}.`
+				: 'Endereço da revelação ainda não definido.',
+			date: groupCreatedTimestamp,
+			order: 3
+		},
+		{
+			icon: hasDraw ? '✅' : '⏳',
+			message: hasDraw
+				? 'Sorteio já foi realizado: sim.'
+				: 'Sorteio já foi realizado: não.',
+			date: latestDrawTimestamp ?? groupCreatedTimestamp,
+			order: 4
 		},
 		{
 			icon: '🗓️',
 			message: latestDrawDateDisplay
-				? `Sorteio realizado em ${latestDrawDateDisplay}.`
-				: 'Sorteio ainda não realizado.',
-			date: latestDrawTimestamp,
-			order: 2
-		},
-		{
-			icon: '✅',
-			message: latestParticipantName
-				? `O participante ${latestParticipantName} aceitou o convite.`
-				: 'Nenhum participante confirmou presença ainda.',
-			date: latestParticipantDate,
-			order: 3
-		},
-		{
-			icon: '🎁',
-			message: giftTheme ? `Tema do presente: ${giftTheme}.` : 'Tema do presente ainda não definido.',
-			date: null,
-			order: 4
-		},
-		{
-			icon: '📅',
-			message: drawDate ? `Sorteio previsto para ${drawDate}.` : 'Sorteio ainda sem data definida.',
-			date: drawDateTimestamp,
+				? `Último sorteio realizado em ${latestDrawDateDisplay}.`
+				: 'Último sorteio realizado: nenhum.',
+			date: latestDrawTimestamp ?? groupCreatedTimestamp,
 			order: 5
 		},
 		{
-			icon: '🎉',
-			message: revealDate ? `Revelação prevista para ${revealDate}.` : 'Revelação ainda sem data definida.',
-			date: revealDateTimestamp,
+			icon: '🎁',
+			message: `Tema do grupo: ${themeLabel}.`,
+			date: groupCreatedTimestamp,
 			order: 6
 		}
 	];
