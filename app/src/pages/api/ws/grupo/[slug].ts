@@ -87,7 +87,7 @@ export const GET: APIRoute = async ({ request, params, cookies }) => {
 		}
 
 		const userRecord = await env.DB.prepare(
-			`SELECT nome, email
+			`SELECT nome, email, avatar
 			 FROM usuario
 			 WHERE id = ?
 			 LIMIT 1`
@@ -95,10 +95,8 @@ export const GET: APIRoute = async ({ request, params, cookies }) => {
 			.bind(userId)
 			.first();
 
-		const displayName =
-			(userRecord as { nome?: string | null; email?: string | null })?.nome ??
-			(userRecord as { email?: string | null })?.email ??
-			'Participante';
+		const user = userRecord as { nome?: string | null; email?: string | null; avatar?: string | null } | null;
+		const displayName = user?.nome ?? user?.email ?? 'Participante';
 
 		const roomId = env.PRESENTES_STATE.idFromName(groupId);
 		const stub = env.PRESENTES_STATE.get(roomId);
@@ -109,6 +107,7 @@ export const GET: APIRoute = async ({ request, params, cookies }) => {
 		forwardHeaders.set('x-chat-group-slug', slug);
 		forwardHeaders.set('x-chat-user-id', userId);
 		forwardHeaders.set('x-chat-display-name', displayName);
+		forwardHeaders.set('x-chat-avatar-url', user?.avatar ?? '');
 
 		const stubUrl = new URL('https://presentes/chat');
 		const stubRequest = new Request(stubUrl.toString(), {
