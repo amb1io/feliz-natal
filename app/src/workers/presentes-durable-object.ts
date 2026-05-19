@@ -12,6 +12,7 @@ type ChatSession = {
 	socket: WebSocket;
 	userId: string;
 	displayName: string;
+	avatarUrl?: string | null;
 };
 
 export class PresentesDurableObject extends DurableObject {
@@ -46,6 +47,7 @@ export class PresentesDurableObject extends DurableObject {
 		const headerGroupId = request.headers.get('x-chat-group-id');
 		const headerUserId = request.headers.get('x-chat-user-id');
 		const headerDisplayName = request.headers.get('x-chat-display-name');
+		const headerAvatarUrl = request.headers.get('x-chat-avatar-url');
 		const groupId = headerGroupId ?? url.searchParams.get('groupId');
 		const userId = headerUserId ?? url.searchParams.get('userId');
 		const displayName = headerDisplayName ?? url.searchParams.get('displayName') ?? 'Participante';
@@ -62,7 +64,8 @@ export class PresentesDurableObject extends DurableObject {
 			id: sessionId,
 			socket: server,
 			userId,
-			displayName
+			displayName,
+			avatarUrl: headerAvatarUrl?.trim() || null
 		};
 
 		this.sessions.set(sessionId, session);
@@ -155,7 +158,8 @@ export class PresentesDurableObject extends DurableObject {
 			id: messageId,
 			body,
 			authorId: session.userId,
-			initials: computeInitials(session.displayName)
+			initials: computeInitials(session.displayName),
+			avatarUrl: session.avatarUrl ?? null
 		};
 
 		this.broadcast(JSON.stringify({ type: 'message', payload: messageRecord }));

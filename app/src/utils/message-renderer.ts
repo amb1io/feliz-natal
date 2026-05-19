@@ -36,6 +36,7 @@ type MessageForRender = {
 	body: string;
 	authorId: string;
 	initials: string;
+	avatarUrl?: string | null;
 };
 
 const messageAvatarClass = (isSelf: boolean) =>
@@ -52,12 +53,15 @@ export const renderMessageBubble = (message: MessageForRender, viewerId: string)
 	const ordering = isSelf ? 'flex-row-reverse' : '';
 	const avatar = messageAvatarClass(isSelf);
 	const bubble = messageBubbleClass(isSelf);
+	const avatarMarkup = message.avatarUrl
+		? `<img src="${escapeHtml(message.avatarUrl)}" alt="Avatar" class="h-full w-full rounded-full object-cover" loading="lazy" decoding="async" />`
+		: escapeHtml(message.initials);
 
 	return `
 <div class="${alignment}" data-message-id="${message.id}" data-from="${isSelf ? 'me' : 'friend'}">
 	<div class="flex items-end gap-3 ${ordering}">
-		<span class="flex h-8 w-8 items-center justify-center rounded-full border ${avatar} text-xs font-semibold uppercase">
-			${escapeHtml(message.initials)}
+		<span class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border ${avatar} text-xs font-semibold uppercase">
+			${avatarMarkup}
 		</span>
 		<p class="max-w-xs rounded-2xl px-4 py-2 text-sm text-[var(--color-text)] ${bubble}">
 			${formatBody(message.body)}

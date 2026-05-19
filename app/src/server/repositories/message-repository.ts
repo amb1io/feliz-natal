@@ -36,7 +36,7 @@ export const insertSecretMessage = async (
 export const findGroupMessages = async (db: D1Database, groupId: string) => {
 	const result = await db
 		.prepare(
-			`SELECT m.id, m.body, m.remetente_id, u.nome, u.email
+			`SELECT m.id, m.body, m.remetente_id, u.nome, u.email, u.avatar
 			 FROM mensagem m
 			 LEFT JOIN usuario u ON u.id = m.remetente_id
 			 WHERE m.grupo_id = ?
@@ -57,7 +57,7 @@ export const findSecretMessages = async (
 ) => {
 	const result = await db
 		.prepare(
-			`SELECT m.id, m.body, m.remetente_id, m.recipiente_id, u.nome, u.email
+			`SELECT m.id, m.body, m.remetente_id, m.recipiente_id, u.nome, u.email, u.avatar
 			 FROM mensagem m
 			 LEFT JOIN usuario u ON u.id = m.remetente_id
 			 WHERE m.grupo_id = ?

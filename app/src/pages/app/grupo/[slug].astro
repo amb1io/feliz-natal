@@ -42,8 +42,10 @@ const {
 	acceptedInviteCount,
 	hasDraw,
 	recipientInitials,
+	recipientAvatarUrl,
 	recipientDisplay,
 	drawerInitials,
+	drawerAvatarUrl,
 	drawerDisplay,
 	secretMessagingAvailable,
 	secretRecipientIdValue,
@@ -228,7 +230,7 @@ const {
 					</button>
 				</div>
 		<div class={`flex flex-col items-center gap-3 ${hasDraw ? '' : 'opacity-50'}`} :class="hasDraw && !reveal ? 'blur-md' : ''">
-				<AvatarBubble initials={recipientInitials} />
+				<AvatarBubble initials={recipientInitials} avatarUrl={recipientAvatarUrl} />
 						<p class="text-sm text-[var(--color-text)]">{recipientDisplay}</p>
 					</div>
 					<div class="flex justify-center">
@@ -246,7 +248,7 @@ const {
 			<PanelCard x-data="{ hasDraw: $el.dataset.hasDraw === 'true' }" data-has-draw={hasDraw ? 'true' : 'false'}>
 					<h2 class="text-lg font-semibold text-[var(--color-text)]">Quem tirou você</h2>
 					<div class="flex flex-col items-center gap-3 text-center">
-						<AvatarBubble initials={drawerInitials} variant="secondary" />
+						<AvatarBubble initials={drawerInitials} avatarUrl={drawerAvatarUrl} variant="secondary" />
 						<p class="text-sm text-[var(--color-text)]">{drawerDisplay}</p>
 						<button
 							type="button"
@@ -275,7 +277,7 @@ const {
 					@click="showParticipant($event)"
 				>
 					<div class="flex items-center gap-3">
-						<AvatarBubble initials={participant.initials} size="sm" />
+						<AvatarBubble initials={participant.initials} avatarUrl={participant.avatarUrl} size="sm" />
 						<div>
 							<p class="text-sm font-semibold text-[var(--color-text)]">{participant.name}</p>
 							<p class="text-xs text-[var(--color-text-muted)]">{participant.statusLabel}</p>
@@ -327,8 +329,17 @@ const {
 				</button>
 			</div>
 			<div class="flex flex-col items-center gap-4 text-center">
-				<span class="flex h-16 w-16 items-center justify-center rounded-full border border-[rgba(230,57,70,0.35)] bg-[rgba(230,57,70,0.12)] text-base font-semibold uppercase text-[var(--color-primary)] shadow-[0_6px_16px_rgba(230,57,70,0.2)]">
-					<span x-text="participant?.initials ?? ''"></span>
+				<span class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-[rgba(230,57,70,0.35)] bg-[rgba(230,57,70,0.12)] text-base font-semibold uppercase text-[var(--color-primary)] shadow-[0_6px_16px_rgba(230,57,70,0.2)]">
+					<template x-if="participant?.avatarUrl">
+						<img
+							:src="participant?.avatarUrl ?? ''"
+							alt="Avatar"
+							class="h-full w-full rounded-full object-cover"
+						/>
+					</template>
+					<template x-if="!participant?.avatarUrl">
+						<span x-text="participant?.initials ?? ''"></span>
+					</template>
 				</span>
 				<div>
 					<p class="text-2xl font-semibold text-[var(--color-text)]" x-text="participant?.name ?? ''"></p>

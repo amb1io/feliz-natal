@@ -57,6 +57,7 @@ export type GroupPageData = {
 		id: string;
 		name: string;
 		initials: string;
+		avatarUrl: string | null;
 		isConfirmed: boolean;
 		statusLabel: string;
 		inviteTag: string | null;
@@ -67,8 +68,10 @@ export type GroupPageData = {
 	acceptedInviteCount: number;
 	hasDraw: boolean;
 	recipientInitials: string;
+	recipientAvatarUrl: string | null;
 	recipientDisplay: string;
 	drawerInitials: string;
+	drawerAvatarUrl: string | null;
 	drawerDisplay: string;
 	yourRecipientId: string | null;
 	secretRecipientId: string | null;
@@ -76,8 +79,8 @@ export type GroupPageData = {
 	secretRecipientIdValue: string;
 	shouldAutoOpenSecretModal: boolean;
 	initialSecretModalOpen: boolean;
-	messageHistory: Array<{ id: string; body: string; authorId: string; initials: string }>;
-	secretMessageHistory: Array<{ id: string; body: string; authorId: string; initials: string }>;
+	messageHistory: Array<{ id: string; body: string; authorId: string; initials: string; avatarUrl?: string | null }>;
+	secretMessageHistory: Array<{ id: string; body: string; authorId: string; initials: string; avatarUrl?: string | null }>;
 	secretMessagesHtml: string;
 	chatEndpoint: string | null;
 	chatEnabled: boolean;
@@ -224,6 +227,7 @@ export async function loadGroupPageData(
 				id: participant.usuario_id,
 				name: displayName,
 				initials,
+				avatarUrl: participant.avatar ?? null,
 				isConfirmed,
 				statusLabel,
 				inviteTag: isRecordOrganizer || isConfirmed ? null : 'Convite pendente',
@@ -232,6 +236,7 @@ export async function loadGroupPageData(
 					userId: participant.usuario_id,
 					name: displayName,
 					initials,
+					avatarUrl: participant.avatar ?? null,
 					status: statusLabel,
 					inviteId: linkedInvite?.id ?? null,
 					contact: linkedContact,
@@ -245,6 +250,7 @@ export async function loadGroupPageData(
 				id: invite.id,
 				name: 'Convite Pendente',
 				initials: 'C',
+				avatarUrl: null,
 				isConfirmed: false,
 				statusLabel: contact,
 				inviteTag: 'Convite pendente',
@@ -253,6 +259,7 @@ export async function loadGroupPageData(
 					userId: null,
 					name: 'Convite Pendente',
 					initials: 'C',
+					avatarUrl: null,
 					status: 'Convite pendente',
 					inviteId: invite.id,
 					contact,
@@ -271,16 +278,20 @@ export async function loadGroupPageData(
 
 	let yourRecipientName: string | null = null;
 	let yourDrawerName: string | null = null;
+	let yourRecipientAvatar: string | null = null;
+	let yourDrawerAvatar: string | null = null;
 	let yourRecipientId: string | null = null;
 	let yourDrawerId: string | null = null;
 
 	if (latestDrawId) {
 		const recipientRow = await findDrawRecipient(env.DB, latestDrawId, userId);
 		if (recipientRow?.nome) yourRecipientName = recipientRow.nome;
+		if (recipientRow?.avatar) yourRecipientAvatar = recipientRow.avatar;
 		if (recipientRow?.id) yourRecipientId = recipientRow.id;
 
 		const drawerRow = await findDrawGiver(env.DB, latestDrawId, userId);
 		if (drawerRow?.nome) yourDrawerName = drawerRow.nome;
+		if (drawerRow?.avatar) yourDrawerAvatar = drawerRow.avatar;
 		if (drawerRow?.id) yourDrawerId = drawerRow.id;
 	}
 
@@ -421,13 +432,15 @@ export async function loadGroupPageData(
 			remetente_id: string;
 			nome?: string | null;
 			email?: string | null;
+			avatar?: string | null;
 		};
 		const displayName = record.nome ?? record.email ?? 'Participante';
 		return {
 			id: record.id,
 			body: record.body,
 			authorId: record.remetente_id,
-			initials: computeInitials(displayName)
+			initials: computeInitials(displayName),
+			avatarUrl: record.avatar ?? null
 		};
 	});
 
@@ -457,13 +470,15 @@ export async function loadGroupPageData(
 			remetente_id: string;
 			nome?: string | null;
 			email?: string | null;
+			avatar?: string | null;
 		};
 		const isSelf = record.remetente_id === userId;
 		return {
 			id: record.id,
 			body: record.body,
 			authorId: record.remetente_id,
-			initials: isSelf ? 'EU' : '??'
+			initials: isSelf ? 'EU' : '??',
+			avatarUrl: record.avatar ?? null
 		};
 	});
 
@@ -477,8 +492,10 @@ export async function loadGroupPageData(
 		acceptedInviteCount,
 		hasDraw,
 		recipientInitials,
+		recipientAvatarUrl: hasDraw ? yourRecipientAvatar : null,
 		recipientDisplay,
 		drawerInitials,
+		drawerAvatarUrl: !isGroupActive ? yourDrawerAvatar : null,
 		drawerDisplay,
 		yourRecipientId,
 		secretRecipientId,
