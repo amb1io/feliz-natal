@@ -2,6 +2,8 @@ export type FelizNatalEnv = {
 	DB: D1Database;
 	WEBSOCKET_WORKER_URL?: string;
 	PRESENTES_STATE?: DurableObjectNamespace;
+	AVATARS_BUCKET?: R2Bucket;
+	AVATAR_PUBLIC_BASE_URL?: string;
 	[key: string]: unknown;
 };
 
