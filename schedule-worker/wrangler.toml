@@ -3,8 +3,89 @@ main = "src/index.ts"
 compatibility_date = "2024-10-01"
 compatibility_flags = ["nodejs_compat"]
 
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
+[vars]
+SITE_URL = "https://feliz.natal.br"
+AWS_REGION = "sa-east-1"
+SES_FROM_EMAIL = "contato@feliz.natal.br"
+SES_FROM_NAME = "Feliz Natal"
+WHATSAPP_API_VERSION = "v25.0"
+WHATSAPP_PHONE_NUMBER_ID = "1040071675863592"
+WHATSAPP_INVITE_TEMPLATE_NAME = "feliz_natal_grupo_criado"
+WHATSAPP_INVITE_TEMPLATE_LANG = "pt_BR"
+WHATSAPP_INVITE_TEMPLATE_COMPONENTS = "header_body"
+WHATSAPP_INVITE_USE_NAMED_PARAMETERS = "true"
+WHATSAPP_INVITE_INCLUDE_HEADER = "false"
+WHATSAPP_INVITE_INCLUDE_BUTTON = "false"
+WHATSAPP_DRAW_TEMPLATE_NAME = "feliz_natal_sorteio_concluido"
+WHATSAPP_DRAW_TEMPLATE_LANG = "pt_BR"
+WHATSAPP_DRAW_TEMPLATE_COMPONENTS = "body"
+WHATSAPP_DRAW_INCLUDE_HEADER = "false"
+WHATSAPP_DRAW_INCLUDE_BUTTON = "false"
+WHATSAPP_SITE_BASE_URL = "https://feliz.natal.br"
+WHATSAPP_HEADER_IMAGE_URL = "https://feliz.natal.br/og-image-whatsapp.jpg"
+WHATSAPP_DEFAULT_COUNTRY_CODE = "55"
+
 [triggers]
 crons = ["0 12 * * *"]
+
+[env.dev.vars]
+SITE_URL = "http://localhost:8788"
+AWS_REGION = "sa-east-1"
+SES_FROM_EMAIL = "contato@feliz.natal.br"
+SES_FROM_NAME = "Feliz Natal"
+WHATSAPP_API_VERSION = "v25.0"
+WHATSAPP_PHONE_NUMBER_ID = "1040071675863592"
+WHATSAPP_INVITE_TEMPLATE_NAME = "feliz_natal_grupo_criado"
+WHATSAPP_INVITE_TEMPLATE_LANG = "pt_BR"
+WHATSAPP_INVITE_TEMPLATE_COMPONENTS = "header_body"
+WHATSAPP_INVITE_USE_NAMED_PARAMETERS = "true"
+WHATSAPP_INVITE_INCLUDE_HEADER = "false"
+WHATSAPP_INVITE_INCLUDE_BUTTON = "false"
+WHATSAPP_DRAW_TEMPLATE_NAME = "feliz_natal_sorteio_concluido"
+WHATSAPP_DRAW_TEMPLATE_LANG = "pt_BR"
+WHATSAPP_DRAW_TEMPLATE_COMPONENTS = "body"
+WHATSAPP_DRAW_INCLUDE_HEADER = "false"
+WHATSAPP_DRAW_INCLUDE_BUTTON = "false"
+WHATSAPP_SITE_BASE_URL = "https://feliz.natal.br"
+WHATSAPP_HEADER_IMAGE_URL = "https://feliz.natal.br/og-image-whatsapp.jpg"
+WHATSAPP_DEFAULT_COUNTRY_CODE = "55"
+
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "feliz-natal"
+database_id = "6aab0390-a39d-468a-9cb6-2e6b8093d8a8"
+
+[env.production.vars]
+SITE_URL = "https://feliz.natal.br"
+AWS_REGION = "sa-east-1"
+SES_FROM_EMAIL = "contato@feliz.natal.br"
+SES_FROM_NAME = "Feliz Natal"
+WHATSAPP_API_VERSION = "v25.0"
+WHATSAPP_PHONE_NUMBER_ID = "1040071675863592"
+WHATSAPP_INVITE_TEMPLATE_NAME = "feliz_natal_grupo_criado"
+WHATSAPP_INVITE_TEMPLATE_LANG = "pt_BR"
+WHATSAPP_INVITE_TEMPLATE_COMPONENTS = "header_body"
+WHATSAPP_INVITE_USE_NAMED_PARAMETERS = "true"
+WHATSAPP_INVITE_INCLUDE_HEADER = "false"
+WHATSAPP_INVITE_INCLUDE_BUTTON = "false"
+WHATSAPP_DRAW_TEMPLATE_NAME = "feliz_natal_sorteio_concluido"
+WHATSAPP_DRAW_TEMPLATE_LANG = "pt_BR"
+WHATSAPP_DRAW_TEMPLATE_COMPONENTS = "body"
+WHATSAPP_DRAW_INCLUDE_HEADER = "false"
+WHATSAPP_DRAW_INCLUDE_BUTTON = "false"
+WHATSAPP_SITE_BASE_URL = "https://feliz.natal.br"
+WHATSAPP_HEADER_IMAGE_URL = "https://feliz.natal.br/og-image-whatsapp.jpg"
+WHATSAPP_DEFAULT_COUNTRY_CODE = "55"
+
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "feliz-natal"
+database_id = "6aab0390-a39d-468a-9cb6-2e6b8093d8a8"
 
 [[d1_databases]]
 binding = "DB"

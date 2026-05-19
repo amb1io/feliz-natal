@@ -1,4 +1,5 @@
-import { sendDrawCompletedEmail } from "../app/src/shared/utils/email";
+import { sendDrawCompletedEmail } from "./email";
+import { sendDrawCompletedWhatsApp } from "./whatsapp";
 
 type GroupRow = {
   id: string;
@@ -11,6 +12,7 @@ type ParticipantContact = {
   id: string;
   email?: string | null;
   nome?: string | null;
+  telefone?: string | null;
 };
 
 const DEFAULT_SITE_URL = "https://feliz.natal.br";
@@ -49,6 +51,26 @@ export default {
 type Env = {
   DB: D1Database;
   SITE_URL?: string;
+  SES_REGION?: string;
+  AWS_REGION?: string;
+  SES_FROM_EMAIL?: string;
+  SES_FROM_NAME?: string;
+  AWS_SES_ACCESS_KEY_ID?: string;
+  AWS_SES_SECRET_ACCESS_KEY?: string;
+  AWS_SESSION_TOKEN?: string;
+  WHATSAPP_ACCESS_TOKEN?: string;
+  META_WHATSAPP_ACCESS_TOKEN?: string;
+  WHATSAPP_PHONE_NUMBER_ID?: string;
+  META_WHATSAPP_PHONE_NUMBER_ID?: string;
+  WHATSAPP_API_VERSION?: string;
+  WHATSAPP_DRAW_TEMPLATE_NAME?: string;
+  WHATSAPP_DRAW_TEMPLATE_LANG?: string;
+  WHATSAPP_DRAW_TEMPLATE_COMPONENTS?: string;
+  WHATSAPP_DRAW_INCLUDE_HEADER?: string;
+  WHATSAPP_DRAW_INCLUDE_BUTTON?: string;
+  WHATSAPP_SITE_BASE_URL?: string;
+  WHATSAPP_HEADER_IMAGE_URL?: string;
+  WHATSAPP_DEFAULT_COUNTRY_CODE?: string;
 };
 
 const fetchGroupsForDate = async (env: Env, isoDate: string) => {
@@ -96,6 +118,7 @@ const runAutomaticDraw = async (env: Env, group: GroupRow) => {
     .run();
 
   const contacts = await fetchParticipantContacts(env, participants);
+  await mergeInvitePhonesIntoContacts(env, group.id, contacts);
 
   const insertResultado = env.DB.prepare(
     `INSERT INTO sorteio_resultado (sorteio_id, remetente_id, recipiente_id)
@@ -124,6 +147,17 @@ const runAutomaticDraw = async (env: Env, group: GroupRow) => {
         participantName: contact.nome ?? null,
       });
       await wait(600); // throttle requests to avoid provider rate limits
+    }
+
+    if (contact?.telefone) {
+      await sendDrawCompletedWhatsApp(env, {
+        to: contact.telefone,
+        groupTitle: group.titulo,
+        groupUrl,
+        recipientName: contact.nome ?? null,
+        revealDate: group.data_revelacao ?? null,
+      });
+      await wait(400); // throttle requests to avoid provider rate limits
     }
   }
 
@@ -166,6 +200,54 @@ const fetchParticipantContacts = async (
   }
 
   return map;
+};
+
+const mergeInvitePhonesIntoContacts = async (
+  env: Env,
+  groupId: string,
+  contacts: Map<string, ParticipantContact>
+) => {
+  const participantEmails = Array.from(
+    new Set(
+      Array.from(contacts.values())
+        .map((contact) => contact.email?.trim().toLowerCase())
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+
+  if (!participantEmails.length) return;
+
+  const result = await env.DB.prepare(
+    `SELECT lower(email) AS email_key, telefone
+     FROM convite
+     WHERE grupo_id = ?1
+       AND email IS NOT NULL
+       AND telefone IS NOT NULL
+       AND trim(telefone) != ''
+     ORDER BY datetime(COALESCE(aceito_em, enviado_em, criado_em, '1970-01-01')) DESC`
+  )
+    .bind(groupId)
+    .all<{ email_key?: string | null; telefone?: string | null }>();
+
+  const phoneByEmail = new Map<string, string>();
+  for (const row of result.results ?? []) {
+    const emailKey = row.email_key?.trim().toLowerCase() ?? "";
+    const phone = row.telefone?.trim() ?? "";
+    if (!emailKey || !phone) continue;
+    if (!participantEmails.includes(emailKey)) continue;
+    if (!phoneByEmail.has(emailKey)) {
+      phoneByEmail.set(emailKey, phone);
+    }
+  }
+
+  for (const [participantId, contact] of contacts.entries()) {
+    const emailKey = contact.email?.trim().toLowerCase() ?? "";
+    if (!emailKey) continue;
+    const phone = phoneByEmail.get(emailKey);
+    if (phone) {
+      contacts.set(participantId, { ...contact, telefone: phone });
+    }
+  }
 };
 
 const createNotification = async (
