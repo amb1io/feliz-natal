@@ -4,16 +4,13 @@
   "version": "0.0.1",
   "scripts": {
     "dev": "astro dev --port 8788",
-    "dev-build": "astro build && npm run db:migrate:local:dev-build && wrangler dev --config dist/server/wrangler.json --port 8788 --persist-to .wrangler/state",
+    "dev-build": "astro build && wrangler dev --config dist/server/wrangler.json --port 8788",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
     "prisma": "prisma",
     "wrangler": "wrangler",
-    "migrations:copy": "node scripts/copy-prisma-migrations.mjs",
-    "db:migrate:local": "wrangler d1 migrations apply feliz-natal --local",
-    "db:migrate:local:dev-build": "wrangler d1 migrations apply feliz-natal --local --persist-to .wrangler/state",
-    "db:shell:local": "wrangler d1 execute feliz-natal --local --command"
+    "migrations:copy": "node scripts/copy-prisma-migrations.mjs"
   },
   "dependencies": {
     "@astrojs/alpinejs": "^0.5.0",
