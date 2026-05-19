@@ -33,7 +33,7 @@ export const findLatestDraw = async (db: D1Database, groupId: string) =>
 export const findDrawRecipient = async (db: D1Database, drawId: string, userId: string) =>
 	db
 		.prepare(
-			`SELECT sr.recipiente_id AS id, COALESCE(u.nome, u.email, 'Participante') AS nome
+			`SELECT sr.recipiente_id AS id, COALESCE(u.nome, u.email, 'Participante') AS nome, u.avatar
 			 FROM sorteio_resultado sr
 			 LEFT JOIN usuario u ON u.id = sr.recipiente_id
 			 WHERE sr.sorteio_id = ?
@@ -41,12 +41,12 @@ export const findDrawRecipient = async (db: D1Database, drawId: string, userId: 
 			 LIMIT 1`
 		)
 		.bind(drawId, userId)
-		.first<{ id?: string; nome?: string }>();
+		.first<{ id?: string; nome?: string; avatar?: string | null }>();
 
 export const findDrawGiver = async (db: D1Database, drawId: string, userId: string) =>
 	db
 		.prepare(
-			`SELECT sr.remetente_id AS id, COALESCE(u.nome, u.email, 'Participante') AS nome
+			`SELECT sr.remetente_id AS id, COALESCE(u.nome, u.email, 'Participante') AS nome, u.avatar
 			 FROM sorteio_resultado sr
 			 LEFT JOIN usuario u ON u.id = sr.remetente_id
 			 WHERE sr.sorteio_id = ?
@@ -54,7 +54,7 @@ export const findDrawGiver = async (db: D1Database, drawId: string, userId: stri
 			 LIMIT 1`
 		)
 		.bind(drawId, userId)
-		.first<{ id?: string; nome?: string }>();
+		.first<{ id?: string; nome?: string; avatar?: string | null }>();
 
 export const findParticipantContacts = async (db: D1Database, participantIds: string[]) => {
 	const contacts = new Map<string, { email: string; nome?: string | null; telefone?: string | null }>();

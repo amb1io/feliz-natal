@@ -1,11 +1,12 @@
 ---
 interface Props {
 	initials: string;
+	avatarUrl?: string | null;
 	variant?: 'primary' | 'secondary';
 	size?: 'sm' | 'md' | 'lg';
 }
 
-const { initials, variant = 'primary', size = 'md' } = Astro.props;
+const { initials, avatarUrl = null, variant = 'primary', size = 'md' } = Astro.props;
 
 const sizeClasses = {
 	sm: 'h-12 w-12 text-sm',
@@ -24,5 +25,15 @@ const variantClasses = {
 <span
 	class={`flex items-center justify-center rounded-full border font-semibold uppercase ${sizeClasses[size]} ${variantClasses[variant]}`}
 >
-	{initials}
+	{avatarUrl ? (
+		<img
+			src={avatarUrl}
+			alt="Avatar"
+			class="h-full w-full rounded-full object-cover"
+			loading="lazy"
+			decoding="async"
+		/>
+	) : (
+		initials
+	)}
 </span>

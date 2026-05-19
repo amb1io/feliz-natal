@@ -16,12 +16,15 @@ const renderMessageBubble = (message, viewerId) => {
 		? 'border-[rgba(230,57,70,0.35)] bg-[rgba(230,57,70,0.12)] text-[var(--color-primary)]'
 		: 'border-[rgba(42,157,143,0.35)] bg-[rgba(42,157,143,0.12)] text-[var(--color-text-muted)]';
 	const bubbleClass = isSelf ? 'rounded-br-sm bg-[rgba(230,57,70,0.2)]' : 'rounded-bl-sm bg-[rgba(42,157,143,0.18)]';
+	const avatarMarkup = message.avatarUrl
+		? `<img src="${escapeHtml(message.avatarUrl)}" alt="Avatar" class="h-full w-full rounded-full object-cover" loading="lazy" decoding="async" />`
+		: escapeHtml(message.initials);
 
 	return `
 <div class="${alignment}" data-message-id="${message.id}" data-from="${isSelf ? 'me' : 'friend'}">
 	<div class="flex items-end gap-3 ${ordering}">
-		<span class="flex h-8 w-8 items-center justify-center rounded-full border ${avatarClass} text-xs font-semibold uppercase">
-			${escapeHtml(message.initials)}
+		<span class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full border ${avatarClass} text-xs font-semibold uppercase">
+			${avatarMarkup}
 		</span>
 		<p class="max-w-xs rounded-2xl px-4 py-2 text-sm text-[var(--color-text)] ${bubbleClass}">
 			${formatBody(message.body)}
