@@ -1,6 +1,7 @@
 ---
 import Layout from "../../../layouts/Layout.astro";
 import AppHeader from "../../../components/AppHeader.astro";
+import Footer from "../../../components/Footer.astro";
 import { getEnv } from "../../../server/request-context";
 
 export const prerender = false;
@@ -90,12 +91,15 @@ const giftItems = presents.map((present) => ({
   image: present.image,
   url: buildTrackedUrl(present.source),
 }));
+
+const initialCountLabel =
+  giftItems.length === 1 ? "1 item" : `${giftItems.length} itens`;
 ---
 
 <Layout title={`Lista de Presentes · ${ownerName}`}>
   <div class="flex min-h-screen flex-col bg-transparent">
     <AppHeader />
-    <main class="flex-1 bg-[var(--color-background)] py-16 text-[var(--color-text)]">
+    <main class="flex-1 py-16 text-[var(--color-text)]">
       <section class="mx-auto flex max-w-5xl flex-col gap-10 px-6">
         <header class="space-y-4 text-center">
           <p class="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--color-text-muted)]">
@@ -121,7 +125,7 @@ const giftItems = presents.map((present) => ({
             <span
               class="rounded-full border border-[var(--color-border)] px-4 py-1 text-sm font-semibold text-[var(--color-text-muted)]"
             >
-              {giftItems.length === 1 ? "1 item" : `${giftItems.length} itens`}
+              {initialCountLabel}
             </span>
           </div>
 
@@ -130,7 +134,7 @@ const giftItems = presents.map((present) => ({
               giftItems.length ? (
                 giftItems.map((item) => (
                   <article
-                    class="flex flex-col gap-4 rounded-[1.5rem] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[0_10px_30px_rgba(16,24,40,0.06)] sm:flex-row sm:items-stretch"
+                    class="relative flex flex-col gap-4 rounded-[1.5rem] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-[0_10px_30px_rgba(16,24,40,0.06)] sm:flex-row sm:items-stretch"
                   >
                     <div
                       class="relative flex h-48 w-full items-center justify-center overflow-hidden rounded-2xl bg-[var(--color-background)] sm:h-36 sm:w-48"
@@ -187,5 +191,6 @@ const giftItems = presents.map((present) => ({
         </div>
       </section>
     </main>
+    <Footer />
   </div>
 </Layout>
