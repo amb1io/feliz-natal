@@ -29,6 +29,27 @@ export const findPendingInvites = async (db: D1Database, groupId: string) => {
 	}>;
 };
 
+export const findGroupInvitesTimeline = async (db: D1Database, groupId: string) => {
+	const result = await db
+		.prepare(
+			`SELECT id, email, telefone, status, criado_em, enviado_em, aceito_em
+			 FROM convite
+			 WHERE grupo_id = ?
+			 ORDER BY datetime(COALESCE(aceito_em, enviado_em, criado_em, '1970-01-01')) DESC`
+		)
+		.bind(groupId)
+		.all();
+	return (result?.results ?? []) as Array<{
+		id: string;
+		email?: string | null;
+		telefone?: string | null;
+		status?: string | null;
+		criado_em?: string | null;
+		enviado_em?: string | null;
+		aceito_em?: string | null;
+	}>;
+};
+
 export const findInviteById = async (db: D1Database, inviteId: string, groupId: string) =>
 	db
 		.prepare(
