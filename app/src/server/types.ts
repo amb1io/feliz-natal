@@ -1,6 +1,7 @@
 export type FelizNatalEnv = {
 	DB: D1Database;
 	WEBSOCKET_WORKER_URL?: string;
+	PRESENTES_STATE?: DurableObjectNamespace;
 	[key: string]: unknown;
 };
 

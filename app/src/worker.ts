@@ -1,14 +1,9 @@
-import type { SSRManifest } from 'astro';
-import { createExports as cfCreateExports } from '@astrojs/cloudflare/entrypoints/server.js';
 import { PresentesDurableObject } from './workers/presentes-durable-object';
+import { handle } from '@astrojs/cloudflare/handler';
 
-export const createExports = (manifest: SSRManifest) => {
-	const baseExports = cfCreateExports(manifest);
-	return {
-		...baseExports,
-		PresentesDurableObject
-	};
+export default {
+	fetch(request, env, ctx) {
+		return handle(request, env, ctx);
+	}
 };
-
-export default createExports;
 export { PresentesDurableObject };

@@ -15,6 +15,21 @@ import {
 import { findGroupParticipants } from './repositories/participant-repository';
 import type { FelizNatalEnv, GrupoRow } from './types';
 
+const buildChatEndpoint = (
+	websocketWorkerUrl: string | undefined,
+	groupSlug: string,
+	requestUrl: URL
+): string => {
+	const defaultBase = `${requestUrl.origin}/api/ws/grupo`;
+	const configuredBase = websocketWorkerUrl?.trim() || defaultBase;
+
+	if (configuredBase.includes('{slug}')) {
+		return configuredBase.replace('{slug}', encodeURIComponent(groupSlug));
+	}
+
+	return `${configuredBase.replace(/\/$/, '')}/${encodeURIComponent(groupSlug)}`;
+};
+
 export type GroupPageData = {
 	group: {
 		id: string;
@@ -421,13 +436,14 @@ export async function loadGroupPageData(
 	const secretModalForcedOpen =
 		secretMessagingAvailable && (url.searchParams.get('openSecret') ?? '').toLowerCase() === '1';
 
-	const websocketWorkerBase =
-		typeof env.WEBSOCKET_WORKER_URL === 'string' ? env.WEBSOCKET_WORKER_URL.trim() : '';
-	const chatEndpoint =
-		websocketWorkerBase && grupoRow.slug
-			? `${websocketWorkerBase.replace(/\/$/, '')}/${grupoRow.slug}`
-			: null;
-	const chatEnabled = Boolean(chatEndpoint);
+	const chatEndpoint = grupoRow.slug
+		? buildChatEndpoint(
+				typeof env.WEBSOCKET_WORKER_URL === 'string' ? env.WEBSOCKET_WORKER_URL : undefined,
+				grupoRow.slug,
+				url
+			)
+		: null;
+	const chatEnabled = Boolean(chatEndpoint && grupoRow.slug);
 
 	let secretMessageHistory =
 		secretMessagingAvailable && secretRecipientId
