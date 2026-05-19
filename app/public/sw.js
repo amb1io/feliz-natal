@@ -1,5 +1,5 @@
-const VERSION = "fn-offline-v2";
-const ASSET_VERSION = "fn-assets-v2";
+const VERSION = "fn-offline-v1";
+const ASSET_VERSION = "fn-assets-v1";
 const OFFLINE_URL = "/offline.html";
 
 const CORE_ROUTES = [
@@ -22,11 +22,6 @@ const STATIC_EXTENSIONS = [
   "woff",
   "woff2"
 ];
-
-// Dynamic interaction scripts should always come from network.
-const NO_CACHE_ASSETS = new Set([
-  "/scripts/draw-flow.js"
-]);
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -62,11 +57,6 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   const extension = url.pathname.split(".").pop();
-  if (url.origin === self.location.origin && NO_CACHE_ASSETS.has(url.pathname)) {
-    event.respondWith(fetch(request));
-    return;
-  }
-
   if (
     url.origin === self.location.origin &&
     extension &&

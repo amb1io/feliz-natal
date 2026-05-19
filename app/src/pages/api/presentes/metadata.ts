@@ -124,26 +124,9 @@ export const POST: APIRoute = async ({ request }) => {
 		});
 
 		if (!response.ok) {
-			const upstreamStatus = response.status;
-			const upstreamHost = parsed.hostname;
-			console.warn('[presentes/metadata] Falha ao capturar página externa', {
-				host: upstreamHost,
-				url: parsed.toString(),
-				status: upstreamStatus
-			});
-
-			const mappedStatus =
-				upstreamStatus === 404 ? 404 : upstreamStatus >= 500 ? 502 : 422;
-			const mappedError =
-				upstreamStatus === 403
-					? 'O site do produto bloqueou a leitura automática. Tente outra URL ou adicione manualmente.'
-					: upstreamStatus === 404
-						? 'A página informada não foi encontrada.'
-						: 'Não foi possível ler os dados deste site automaticamente. Tente outra URL.';
-
 			return jsonResponse(
-				{ ok: false, error: mappedError },
-				mappedStatus
+				{ ok: false, error: `Não foi possível carregar a página (${response.status}).` },
+				response.status >= 400 && response.status < 600 ? response.status : 500
 			);
 		}
 
