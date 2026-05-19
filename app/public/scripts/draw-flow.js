@@ -2,24 +2,34 @@
 	const form = document.querySelector('[data-draw-form]');
 	const loader = document.querySelector('[data-draw-loader]');
 	const alertModal = document.querySelector('[data-draw-alert-modal]');
+	const confirmModal = document.querySelector('[data-draw-confirm-modal]');
+	const confirmSubmitButton = confirmModal?.querySelector('[data-draw-confirm-submit]');
 	const submitButton = form?.querySelector('[data-draw-submit]');
 	const errorPlaceholder = document.querySelector('[data-draw-error]');
 	let hideTimer = null;
-	if (!form || !loader) return;
-	const acceptedInviteCount = Number(form.dataset.acceptedInviteCount ?? '0');
-	const hasAcceptedInvites = acceptedInviteCount > 0;
+	if (!form || !loader || !(submitButton instanceof HTMLButtonElement)) return;
 
-	const showAlertModal = () => {
-		if (!(alertModal instanceof HTMLElement)) return;
-		alertModal.classList.remove('hidden');
-		alertModal.classList.add('flex');
+	const showModal = (modal) => {
+		if (!(modal instanceof HTMLElement)) return;
+		modal.removeAttribute('hidden');
+		modal.classList.remove('hidden');
+		modal.classList.add('flex');
 	};
 
-	const hideAlertModal = () => {
-		if (!(alertModal instanceof HTMLElement)) return;
-		alertModal.classList.add('hidden');
-		alertModal.classList.remove('flex');
+	const hideModal = (modal) => {
+		if (!(modal instanceof HTMLElement)) return;
+		modal.setAttribute('hidden', '');
+		modal.classList.add('hidden');
+		modal.classList.remove('flex');
 	};
+
+	const showAlertModal = () => showModal(alertModal);
+	const hideAlertModal = () => hideModal(alertModal);
+	const showConfirmModal = () => showModal(confirmModal);
+	const hideConfirmModal = () => hideModal(confirmModal);
+
+	hideAlertModal();
+	hideConfirmModal();
 
 	const showLoader = () => {
 		if (hideTimer !== null) {
@@ -28,10 +38,8 @@
 		}
 		loader.classList.add('flex');
 		loader.classList.remove('hidden');
-		if (submitButton instanceof HTMLButtonElement) {
-			submitButton.setAttribute('disabled', 'true');
-			submitButton.classList.add('opacity-75', 'pointer-events-none');
-		}
+		submitButton.setAttribute('disabled', 'true');
+		submitButton.classList.add('opacity-75', 'pointer-events-none');
 	};
 
 	const hideLoader = () => {
@@ -41,10 +49,8 @@
 		hideTimer = window.setTimeout(() => {
 			loader.classList.add('hidden');
 			loader.classList.remove('flex');
-			if (submitButton instanceof HTMLButtonElement) {
-				submitButton.removeAttribute('disabled');
-				submitButton.classList.remove('opacity-75', 'pointer-events-none');
-			}
+			submitButton.removeAttribute('disabled');
+			submitButton.classList.remove('opacity-75', 'pointer-events-none');
 			hideTimer = null;
 		}, 5000);
 	};
@@ -71,67 +77,91 @@
 		return typeof redirectHeader === 'string' && redirectHeader.length > 0;
 	};
 
-	if (!('htmx' in window) || !window.htmx) {
-		form.addEventListener('submit', (event) => {
-			if (!isDrawIntent()) return;
-			if (!hasAcceptedInvites) {
-				event.preventDefault();
-				showAlertModal();
-				return;
-			}
-			setError('');
-			showLoader();
-		});
-		return;
-	}
+	const hasAcceptedInvites = () => Number(form.dataset.acceptedInviteCount ?? '0') > 0;
+	const hasPreviousDraw = () => {
+		const fromDataset = form.dataset.hasDraw === 'true';
+		const fromLabel = (submitButton.textContent ?? '').toLowerCase().includes('novo sorteio');
+		return fromDataset || fromLabel;
+	};
 
-	form.addEventListener('htmx:beforeRequest', (event) => {
-		if (event.target !== form || !isDrawIntent()) return;
-		if (!hasAcceptedInvites) {
-			event.preventDefault();
+	const proceedWithDraw = () => {
+		setError('');
+		showLoader();
+		if (typeof form.requestSubmit === 'function') {
+			form.requestSubmit();
+			return;
+		}
+		const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+		const notCancelled = form.dispatchEvent(submitEvent);
+		if (notCancelled) {
+			form.submit();
+		}
+	};
+
+	const handleDrawButtonClick = (event) => {
+		event.preventDefault();
+		if (!hasAcceptedInvites()) {
 			showAlertModal();
 			return;
 		}
-		setError('');
-		showLoader();
-	});
-
-	form.addEventListener('htmx:afterRequest', (event) => {
-		if (event.target !== form || !isDrawIntent()) return;
-		if (shouldKeepLoader(event)) {
+		if (hasPreviousDraw()) {
+			showConfirmModal();
 			return;
 		}
-		hideLoader();
-	});
+		proceedWithDraw();
+	};
 
-	form.addEventListener('htmx:responseError', (event) => {
-		if (event.target !== form || !isDrawIntent()) return;
-		const responseText = event.detail?.xhr?.responseText?.trim() ?? '';
-		hideLoader();
-		setError(responseText || 'Não foi possível realizar o sorteio agora. Tente novamente.');
-	});
+	submitButton.addEventListener('click', handleDrawButtonClick);
 
-	form.addEventListener('htmx:sendError', (event) => {
-		if (event.target !== form || !isDrawIntent()) return;
-		hideLoader();
-		setError('Não foi possível realizar o sorteio agora. Verifique sua conexão e tente novamente.');
-	});
+	if (confirmSubmitButton instanceof HTMLButtonElement) {
+		confirmSubmitButton.addEventListener('click', () => {
+			hideConfirmModal();
+			proceedWithDraw();
+		});
+	}
 
-	if (alertModal instanceof HTMLElement) {
-		alertModal.addEventListener('click', (event) => {
+	if ('htmx' in window && window.htmx) {
+		form.addEventListener('htmx:afterRequest', (event) => {
+			if (event.target !== form || !isDrawIntent()) return;
+			if (shouldKeepLoader(event)) {
+				return;
+			}
+			hideLoader();
+		});
+
+		form.addEventListener('htmx:responseError', (event) => {
+			if (event.target !== form || !isDrawIntent()) return;
+			const responseText = event.detail?.xhr?.responseText?.trim() ?? '';
+			hideLoader();
+			setError(responseText || 'Não foi possível realizar o sorteio agora. Tente novamente.');
+		});
+
+		form.addEventListener('htmx:sendError', (event) => {
+			if (event.target !== form || !isDrawIntent()) return;
+			hideLoader();
+			setError('Não foi possível realizar o sorteio agora. Verifique sua conexão e tente novamente.');
+		});
+	}
+
+	const bindModalDismiss = (modal, hide) => {
+		if (!(modal instanceof HTMLElement)) return;
+		modal.addEventListener('click', (event) => {
 			const rawTarget = event.target;
 			if (!(rawTarget instanceof Node)) return;
 			const targetElement =
 				rawTarget instanceof Element ? rawTarget : rawTarget.parentElement;
 			if (!targetElement) return;
-			if (targetElement === alertModal || targetElement.closest('[data-draw-alert-close]')) {
-				hideAlertModal();
+			if (targetElement === modal || targetElement.closest('[data-draw-alert-close]')) {
+				hide();
 			}
 		});
 		document.addEventListener('keydown', (event) => {
-			if (event.key === 'Escape' && !alertModal.classList.contains('hidden')) {
-				hideAlertModal();
+			if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+				hide();
 			}
 		});
-	}
+	};
+
+	bindModalDismiss(alertModal, hideAlertModal);
+	bindModalDismiss(confirmModal, hideConfirmModal);
 })();

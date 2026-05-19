@@ -83,9 +83,7 @@ const initialGiftItemsJson = JSON.stringify(initialGiftItems).replace(
 <Layout title="Lista de Presentes">
   <div class="flex min-h-screen flex-col bg-transparent">
     <AppHeader />
-    <main
-      class="flex-1 bg-[var(--color-background)] py-16 text-[var(--color-text)]"
-    >
+    <main class="flex-1 py-16 text-[var(--color-text)]">
       <section class="mx-auto flex max-w-5xl flex-col gap-10 px-6">
         <header class="space-y-4 text-center">
           <p
@@ -214,7 +212,7 @@ const initialGiftItemsJson = JSON.stringify(initialGiftItems).replace(
                         <p class="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]">
                           Presente
                         </p>
-                        <h3 class="text-xl font-semibold text-[var(--color-text)]">
+                        <h3 class="relative min-w-full [overflow-wrap:anywhere] text-xl font-semibold text-[var(--color-text)]">
                           {item.title ?? "Produto sem título"}
                         </h3>
                         <p class="text-base text-[var(--color-text-muted)]">
@@ -227,7 +225,7 @@ const initialGiftItemsJson = JSON.stringify(initialGiftItems).replace(
                         href={item.trackedUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        class="inline-flex items-center justify-center rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-semibold uppercase tracking-[0.25em] text-white transition hover:bg-[var(--color-accent)]/90"
+                        class="inline-flex items-center justify-center rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-semibold uppercase tracking-[0.25em] !text-white transition hover:bg-[var(--color-accent)]/90"
                       >
                         Abrir produto
                       </a>
@@ -297,7 +295,7 @@ const initialGiftItemsJson = JSON.stringify(initialGiftItems).replace(
           </p>
           <h3
             data-role="title"
-            class="text-xl font-semibold text-[var(--color-text)]"
+            class="relative min-w-full [overflow-wrap:anywhere] text-xl font-semibold text-[var(--color-text)]"
           >
           </h3>
           <p data-role="price" class="text-base text-[var(--color-text-muted)]">
@@ -307,7 +305,7 @@ const initialGiftItemsJson = JSON.stringify(initialGiftItems).replace(
           data-role="link"
           target="_blank"
           rel="noopener noreferrer"
-          class="inline-flex items-center justify-center rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-semibold uppercase tracking-[0.25em] text-white transition hover:bg-[var(--color-accent)]/90"
+          class="inline-flex items-center justify-center rounded-full bg-[var(--color-accent)] px-5 py-2 text-sm font-semibold uppercase tracking-[0.25em] !text-white transition hover:bg-[var(--color-accent)]/90"
         >
           Abrir produto
         </a>
@@ -536,6 +534,16 @@ const initialGiftItemsJson = JSON.stringify(initialGiftItems).replace(
       setFeedback("Buscando informações do presente…", "info");
 
       try {
+        const fallbackUrl = typedUrlNormalized || productUrl;
+        /** @type {{ title: string | null; price: string | null; image: string | null; url: string }} */
+        let productData = {
+          title: fallbackUrl,
+          price: null,
+          image: null,
+          url: fallbackUrl,
+        };
+        let usedFallbackCard = false;
+
         const response = await fetch("/api/presentes/metadata", {
           method: "POST",
           headers: {
@@ -544,20 +552,26 @@ const initialGiftItemsJson = JSON.stringify(initialGiftItems).replace(
           body: JSON.stringify({ url: productUrl }),
         });
 
-        const data = await response.json();
-
-        if (!response.ok || !data?.ok) {
-          throw new Error(
-            data?.error || "Não foi possível buscar as informações."
-          );
+        let data = null;
+        try {
+          data = await response.json();
+        } catch {
+          data = null;
         }
 
-        const product = data.product;
-        if (!product) {
-          throw new Error("Resposta inválida do servidor.");
+        if (response.ok && data?.ok && data?.product) {
+          const product = data.product;
+          productData = {
+            title: product.title ?? fallbackUrl,
+            price: product.price ?? null,
+            image: product.image ?? null,
+            url: normalizeUrl(product.url) || fallbackUrl,
+          };
+        } else {
+          usedFallbackCard = true;
         }
 
-        const productNormalizedUrl = normalizeUrl(product.url);
+        const productNormalizedUrl = normalizeUrl(productData.url) || fallbackUrl;
 
         if (items.some((gift) => gift.url === productNormalizedUrl)) {
           setFeedback("Esse presente já está na sua lista.", "warning");
@@ -565,16 +579,21 @@ const initialGiftItemsJson = JSON.stringify(initialGiftItems).replace(
         }
 
         const savedGift = await persistGift({
-          title: product.title ?? "Produto sem título",
-          price: product.price ?? null,
-          image: product.image ?? null,
+          title: productData.title ?? fallbackUrl,
+          price: productData.price ?? null,
+          image: productData.image ?? null,
           source: productNormalizedUrl || typedUrlNormalized || productUrl,
         });
 
         items = [savedGift, ...items];
         renderList();
         updateCounter();
-        setFeedback("Presente adicionado com sucesso!", "success");
+        setFeedback(
+          usedFallbackCard
+            ? "Não foi possível capturar os detalhes, mas o link foi adicionado com sucesso."
+            : "Presente adicionado com sucesso!",
+          usedFallbackCard ? "warning" : "success"
+        );
         form.reset();
         input.focus();
       } catch (error) {

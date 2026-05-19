@@ -161,6 +161,25 @@ export async function loadGroupPageData(
 		...participantRecords.filter((participant) => participant.usuario_id !== organizerId)
 	];
 
+	const pendingInviteByEmail = new Map<string, (typeof pendingInviteRecords)[number]>();
+	for (const invite of pendingInviteRecords) {
+		const emailLower = invite.email?.trim().toLowerCase();
+		if (emailLower && !pendingInviteByEmail.has(emailLower)) {
+			pendingInviteByEmail.set(emailLower, invite);
+		}
+	}
+
+	const participantEmails = new Set(
+		participantRecords
+			.map((participant) => participant.email?.trim().toLowerCase())
+			.filter((email): email is string => Boolean(email))
+	);
+
+	const standalonePendingInvites = pendingInviteRecords.filter((invite) => {
+		const emailLower = invite.email?.trim().toLowerCase();
+		return !(emailLower && participantEmails.has(emailLower));
+	});
+
 	const participantEntries = [
 		...orderedParticipantRecords.map((participant) => {
 			const displayName = participant.nome;
@@ -171,10 +190,17 @@ export async function loadGroupPageData(
 					? participant.is_confirmado
 					: participant.is_confirmado
 			);
+			const participantEmailLower = participant.email?.trim().toLowerCase() ?? null;
+			const linkedInvite =
+				!isRecordOrganizer && !isConfirmed && participantEmailLower
+					? (pendingInviteByEmail.get(participantEmailLower) ?? null)
+					: null;
+			const linkedContact =
+				linkedInvite?.email ?? linkedInvite?.telefone ?? participant.email ?? null;
 			const statusLabel = isRecordOrganizer
 				? 'Organizador'
 				: isConfirmed
-					? 'Convite confirmado'
+					? 'Convidado'
 					: 'Convite pendente';
 			return {
 				id: participant.usuario_id,
@@ -182,20 +208,20 @@ export async function loadGroupPageData(
 				initials,
 				isConfirmed,
 				statusLabel,
-				inviteTag: isRecordOrganizer ? null : isConfirmed ? null : 'Convidado',
+				inviteTag: isRecordOrganizer || isConfirmed ? null : 'Convite pendente',
 				isPendingInvite: false,
 				modalPayload: {
 					userId: participant.usuario_id,
 					name: displayName,
 					initials,
 					status: statusLabel,
-					inviteId: null,
-					contact: null,
+					inviteId: linkedInvite?.id ?? null,
+					contact: linkedContact,
 					isConfirmed
 				}
 			};
 		}),
-		...pendingInviteRecords.map((invite) => {
+		...standalonePendingInvites.map((invite) => {
 			const contact = invite.email ?? invite.telefone ?? 'Contato não informado';
 			return {
 				id: invite.id,
