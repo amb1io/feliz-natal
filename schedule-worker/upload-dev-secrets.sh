@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEV_VARS_FILE="${SCRIPT_DIR}/.dev.vars"
+WRANGLER_CONFIG_FILE="${SCRIPT_DIR}/wrangler.toml"
+TARGET_ENV=""
+WORKER_NAME=""
+
+usage() {
+  cat <<'EOF'
+Uso:
+  bash ./upload-dev-secrets.sh [--env <ambiente>] [--file <arquivo>] [--name <worker>] [--config <arquivo>]
+
+Exemplos:
+  bash ./upload-dev-secrets.sh
+  bash ./upload-dev-secrets.sh --env dev
+  bash ./upload-dev-secrets.sh --env production --file .dev.vars
+  bash ./upload-dev-secrets.sh --name feliz-natal
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -e|--env)
+      [[ $# -lt 2 ]] && { echo "Erro: faltou valor para $1."; usage; exit 1; }
+      TARGET_ENV="$2"
+      shift 2
+      ;;
+    -f|--file)
+      [[ $# -lt 2 ]] && { echo "Erro: faltou valor para $1."; usage; exit 1; }
+      DEV_VARS_FILE="$2"
+      if [[ "${DEV_VARS_FILE}" != /* ]]; then
+        DEV_VARS_FILE="${SCRIPT_DIR}/${DEV_VARS_FILE}"
+      fi
+      shift 2
+      ;;
+    -c|--config)
+      [[ $# -lt 2 ]] && { echo "Erro: faltou valor para $1."; usage; exit 1; }
+      WRANGLER_CONFIG_FILE="$2"
+      if [[ "${WRANGLER_CONFIG_FILE}" != /* ]]; then
+        WRANGLER_CONFIG_FILE="${SCRIPT_DIR}/${WRANGLER_CONFIG_FILE}"
+      fi
+      shift 2
+      ;;
+    -n|--name)
+      [[ $# -lt 2 ]] && { echo "Erro: faltou valor para $1."; usage; exit 1; }
+      WORKER_NAME="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Erro: argumento desconhecido: $1"
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+if ! command -v wrangler >/dev/null 2>&1; then
+  echo "Erro: wrangler nao encontrado no PATH."
+  exit 1
+fi
+
+if [[ ! -f "${DEV_VARS_FILE}" ]]; then
+  echo "Erro: arquivo de variaveis nao encontrado em ${DEV_VARS_FILE}."
+  exit 1
+fi
+
+if [[ ! -f "${WRANGLER_CONFIG_FILE}" ]]; then
+  echo "Erro: arquivo de configuracao do wrangler nao encontrado em ${WRANGLER_CONFIG_FILE}."
+  exit 1
+fi
+
+if [[ -z "${WORKER_NAME}" ]]; then
+  WORKER_NAME="$(
+    awk -F= '
+      /^[[:space:]]*name[[:space:]]*=/ {
+        value=$2
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+        gsub(/^"/, "", value)
+        gsub(/"$/, "", value)
+        print value
+        exit
+      }
+    ' "${WRANGLER_CONFIG_FILE}"
+  )"
+fi
+
+if [[ -z "${WORKER_NAME}" ]]; then
+  echo "Erro: nao foi possivel identificar o nome do worker. Use --name <worker>."
+  exit 1
+fi
+
+is_non_secret_key() {
+  case "$1" in
+    PUBLIC_*) return 0 ;;
+    AWS_REGION|AWS_ACCOUNT_ID|USER_POOL_NAME|CALLBACK_URLS|LOGOUT_URLS) return 0 ;;
+    GOOGLE_CLIENT_ID|MICROSOFT_CLIENT_ID|MICROSOFT_TENANT_ID|SLACK_CLIENT_ID|FACEBOOK_LOGIN_APP_ID) return 0 ;;
+    DATABASE_URL|WEBSOCKET_WORKER_URL|AVATAR_PUBLIC_BASE_URL) return 0 ;;
+    WHATSAPP_PHONE_NUMBER_ID|WHATSAPP_API_VERSION|WHATSAPP_SITE_BASE_URL|WHATSAPP_HEADER_IMAGE_URL|WHATSAPP_DEFAULT_COUNTRY_CODE) return 0 ;;
+    WHATSAPP_INVITE_TEMPLATE_NAME|WHATSAPP_INVITE_TEMPLATE_LANG|WHATSAPP_INVITE_TEMPLATE_COMPONENTS|WHATSAPP_INVITE_USE_NAMED_PARAMETERS|WHATSAPP_INVITE_INCLUDE_HEADER|WHATSAPP_INVITE_INCLUDE_BUTTON) return 0 ;;
+    WHATSAPP_SECRET_MESSAGE_TEMPLATE_NAME|WHATSAPP_SECRET_MESSAGE_TEMPLATE_LANG|WHATSAPP_SECRET_MESSAGE_TEMPLATE_COMPONENTS|WHATSAPP_SECRET_MESSAGE_USE_NAMED_PARAMETERS|WHATSAPP_SECRET_MESSAGE_INCLUDE_HEADER|WHATSAPP_SECRET_MESSAGE_INCLUDE_BUTTON) return 0 ;;
+    WHATSAPP_DRAW_TEMPLATE_NAME|WHATSAPP_DRAW_TEMPLATE_LANG|WHATSAPP_DRAW_TEMPLATE_COMPONENTS|WHATSAPP_DRAW_USE_NAMED_PARAMETERS|WHATSAPP_DRAW_INCLUDE_HEADER|WHATSAPP_DRAW_INCLUDE_BUTTON) return 0 ;;
+    SES_FROM_EMAIL|SES_FROM_NAME|SITE_URL) return 0 ;;
+  esac
+
+  return 1
+}
+
+trim_quotes() {
+  local value="$1"
+  if [[ "${value}" == \"*\" && "${value}" == *\" ]]; then
+    value="${value:1:${#value}-2}"
+  elif [[ "${value}" == \'*\' && "${value}" == *\' ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+  printf '%s' "${value}"
+}
+
+uploaded=0
+skipped=0
+wrangler_args=(--name "${WORKER_NAME}" --config "${WRANGLER_CONFIG_FILE}")
+if [[ -n "${TARGET_ENV}" ]]; then
+  wrangler_args+=(--env "${TARGET_ENV}")
+fi
+
+while IFS= read -r raw_line || [[ -n "${raw_line}" ]]; do
+  line="${raw_line#"${raw_line%%[![:space:]]*}"}"
+
+  [[ -z "${line}" ]] && continue
+  [[ "${line}" == \#* ]] && continue
+  [[ "${line}" != *=* ]] && continue
+
+  key="${line%%=*}"
+  value="${line#*=}"
+
+  key="${key%"${key##*[![:space:]]}"}"
+  value="${value#"${value%%[![:space:]]*}"}"
+
+  [[ -z "${key}" ]] && continue
+  [[ -z "${value}" ]] && continue
+
+  if is_non_secret_key "${key}"; then
+    skipped=$((skipped + 1))
+    continue
+  fi
+
+  value="$(trim_quotes "${value}")"
+
+  if [[ -n "${TARGET_ENV}" ]]; then
+    echo "-> enviando segredo: ${key} (worker: ${WORKER_NAME}, env: ${TARGET_ENV})"
+  else
+    echo "-> enviando segredo: ${key} (worker: ${WORKER_NAME}, env: default)"
+  fi
+  printf '%s' "${value}" | wrangler secret put "${key}" "${wrangler_args[@]}"
+  uploaded=$((uploaded + 1))
+done < "${DEV_VARS_FILE}"
+
+echo
+echo "Concluido. Segredos enviados: ${uploaded}. Variaveis ignoradas: ${skipped}."
