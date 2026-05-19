@@ -1,4 +1,5 @@
 name = "feliz-natal-app"
+main = "./src/worker.ts"
 compatibility_date = "2024-10-01"
 compatibility_flags = [ "nodejs_compat" ]
 
@@ -10,7 +11,7 @@ PUBLIC_COGNITO_REDIRECT_URI = "https://feliz.natal.br/auth/callback"
 PUBLIC_COGNITO_LOGOUT_URI = "https://feliz.natal.br/"
 PUBLIC_COGNITO_REGION = "sa-east-1"
 PUBLIC_COGNITO_SUPPORTED_PROVIDERS = "Google,Microsoft,Slack,GitHub,Facebook"
-WEBSOCKET_WORKER_URL = "https://schedule.feliz.natal.br"
+WEBSOCKET_WORKER_URL = "https://feliz.natal.br/api/ws/grupo"
 AWS_REGION = "sa-east-1"
 SES_FROM_EMAIL = "contato@feliz.natal.br"
 SES_FROM_NAME = "Feliz Natal"
@@ -43,6 +44,14 @@ binding = "DB"
 database_name = "feliz-natal"
 database_id = "6aab0390-a39d-468a-9cb6-2e6b8093d8a8"
 migrations_dir = "./migrations"
+
+[[durable_objects.bindings]]
+name = "PRESENTES_STATE"
+class_name = "PresentesDurableObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PresentesDurableObject"]
 
 [[kv_namespaces]]
 binding = "API_CACHE"

@@ -1,4 +1,5 @@
 import type { DurableObjectState } from '@cloudflare/workers-types';
+import { DurableObject } from 'cloudflare:workers';
 import type { MessageRecord } from '../utils/message-renderer';
 import { computeInitials } from '../utils/message-renderer';
 
@@ -13,26 +14,33 @@ type ChatSession = {
 	displayName: string;
 };
 
-export class PresentesDurableObject {
+export class PresentesDurableObject extends DurableObject {
 	private readonly state: DurableObjectState;
 	private readonly env: FelizNatalEnv;
 	private readonly sessions = new Map<string, ChatSession>();
 	private groupId: string | null = null;
 
 	constructor(state: DurableObjectState, env: FelizNatalEnv) {
+		super(state, env);
 		this.state = state;
 		this.env = env;
 	}
 
 	async fetch(request: Request): Promise<Response> {
+		const reqId = crypto.randomUUID().slice(0, 8);
+		console.log('[chat-do] fetch start', {
+			reqId,
+			path: new URL(request.url).pathname,
+			hasUpgradeHeader: Boolean(request.headers.get('Upgrade'))
+		});
+
 		if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
+			console.warn('[chat-do] invalid upgrade header', { reqId });
 			return new Response('Expected websocket', { status: 426 });
 		}
 
-		const webSocket = request.webSocket;
-		if (!webSocket) {
-			return new Response('WebSocket not found on request', { status: 500 });
-		}
+		const pair = new WebSocketPair();
+		const [client, server] = Object.values(pair);
 
 		const url = new URL(request.url);
 		const headerGroupId = request.headers.get('x-chat-group-id');
@@ -43,6 +51,7 @@ export class PresentesDurableObject {
 		const displayName = headerDisplayName ?? url.searchParams.get('displayName') ?? 'Participante';
 
 		if (!groupId || !userId) {
+			console.warn('[chat-do] missing connection metadata', { reqId, groupId, userId });
 			return new Response('Missing connection metadata', { status: 400 });
 		}
 
@@ -51,16 +60,23 @@ export class PresentesDurableObject {
 		const sessionId = crypto.randomUUID();
 		const session: ChatSession = {
 			id: sessionId,
-			socket: webSocket,
+			socket: server,
 			userId,
 			displayName
 		};
 
 		this.sessions.set(sessionId, session);
+		console.log('[chat-do] session accepted', {
+			reqId,
+			sessionId,
+			groupId,
+			userId,
+			activeSessions: this.sessions.size
+		});
 
-		webSocket.accept();
+		server.accept();
 
-		webSocket.addEventListener('message', (event) => {
+		server.addEventListener('message', (event) => {
 			this.handleIncomingMessage(session, event as MessageEvent).catch((error) => {
 				console.error('[chat] failed to handle message', error);
 				this.safeSend(session.socket, JSON.stringify({ type: 'error', message: 'Falha ao processar mensagem.' }));
@@ -69,12 +85,18 @@ export class PresentesDurableObject {
 
 		const teardown = () => {
 			this.sessions.delete(sessionId);
+			console.log('[chat-do] session closed', {
+				reqId,
+				sessionId,
+				groupId: this.groupId,
+				activeSessions: this.sessions.size
+			});
 		};
 
-		webSocket.addEventListener('close', teardown);
-		webSocket.addEventListener('error', teardown);
+		server.addEventListener('close', teardown);
+		server.addEventListener('error', teardown);
 
-		return new Response(null, { status: 101, webSocket });
+		return new Response(null, { status: 101, webSocket: client });
 	}
 
 	private async handleIncomingMessage(session: ChatSession, event: MessageEvent): Promise<void> {
@@ -108,12 +130,26 @@ export class PresentesDurableObject {
 		}
 
 		const messageId = crypto.randomUUID();
-		await this.env.DB.prepare(
-			`INSERT INTO mensagem (id, grupo_id, remetente_id, body)
-			 VALUES (?, ?, ?, ?)`
-		)
-			.bind(messageId, groupId, session.userId, body)
-			.run();
+		try {
+			await this.env.DB.prepare(
+				`INSERT INTO mensagem (id, grupo_id, remetente_id, body)
+				 VALUES (?, ?, ?, ?)`
+			)
+				.bind(messageId, groupId, session.userId, body)
+				.run();
+		} catch (error) {
+			console.error('[chat-do] failed to persist message', {
+				groupId,
+				userId: session.userId,
+				messageId,
+				error
+			});
+			this.safeSend(
+				session.socket,
+				JSON.stringify({ type: 'error', message: 'Falha ao salvar mensagem no servidor.' })
+			);
+			return;
+		}
 
 		const messageRecord: MessageRecord = {
 			id: messageId,
