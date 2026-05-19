@@ -301,6 +301,8 @@ const isPhoneLocked = hasLoginFieldColumn && loginField === "telefone";
                 name="telefone"
                 value={profile?.telefone ?? ""}
                 disabled={isPhoneLocked}
+                data-phone-mask
+                maxlength="19"
                 placeholder="+55 (11) 99999-0000"
                 class="w-full rounded-xl border border-[var(--color-border)] bg-transparent px-4 py-2.5 text-sm text-[var(--color-text)] disabled:cursor-not-allowed disabled:opacity-70"
               />
@@ -399,6 +401,24 @@ const isPhoneLocked = hasLoginFieldColumn && loginField === "telefone";
       const submitButton = document.querySelector("[data-profile-submit]");
       const defaultLabel = document.querySelector("[data-profile-submit-label]");
       const loadingLabel = document.querySelector("[data-profile-submit-loading]");
+      const phoneInput = document.querySelector("[data-phone-mask]");
+
+      const formatBrazilPhone = (value) => {
+        const digits = value.replace(/\D/g, "");
+        const hasCountryCode = digits.startsWith("55");
+        const localDigits = hasCountryCode ? digits.slice(2, 13) : digits.slice(0, 11);
+        const countryPrefix = hasCountryCode ? "+55 " : "";
+
+        if (!localDigits.length) return countryPrefix;
+        if (localDigits.length <= 2) return `${countryPrefix}(${localDigits}`;
+        if (localDigits.length <= 6) {
+          return `${countryPrefix}(${localDigits.slice(0, 2)}) ${localDigits.slice(2)}`;
+        }
+        if (localDigits.length <= 10) {
+          return `${countryPrefix}(${localDigits.slice(0, 2)}) ${localDigits.slice(2, 6)}-${localDigits.slice(6)}`;
+        }
+        return `${countryPrefix}(${localDigits.slice(0, 2)}) ${localDigits.slice(2, 7)}-${localDigits.slice(7)}`;
+      };
 
       if (form instanceof HTMLFormElement && submitButton instanceof HTMLButtonElement) {
         form.addEventListener("submit", () => {
@@ -406,6 +426,13 @@ const isPhoneLocked = hasLoginFieldColumn && loginField === "telefone";
           defaultLabel?.classList.add("hidden");
           loadingLabel?.classList.remove("hidden");
           loadingLabel?.classList.add("inline-flex");
+        });
+      }
+
+      if (phoneInput instanceof HTMLInputElement && !phoneInput.disabled) {
+        phoneInput.value = formatBrazilPhone(phoneInput.value);
+        phoneInput.addEventListener("input", () => {
+          phoneInput.value = formatBrazilPhone(phoneInput.value);
         });
       }
     }
