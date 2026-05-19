@@ -74,6 +74,7 @@
 	if (!('htmx' in window) || !window.htmx) {
 		form.addEventListener('submit', (event) => {
 			if (!isDrawIntent()) return;
+			if (event.defaultPrevented) return;
 			if (!hasAcceptedInvites) {
 				event.preventDefault();
 				showAlertModal();
@@ -87,6 +88,7 @@
 
 	form.addEventListener('htmx:beforeRequest', (event) => {
 		if (event.target !== form || !isDrawIntent()) return;
+		if (event.defaultPrevented) return;
 		if (!hasAcceptedInvites) {
 			event.preventDefault();
 			showAlertModal();

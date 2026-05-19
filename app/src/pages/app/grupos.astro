@@ -124,9 +124,13 @@ const serializedPrecacheTargets = JSON.stringify(precacheTargets);
           {
             grupos.length ? (
               grupos.map((grupo) => (
-                <article class="flex h-full flex-col justify-between rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-6 shadow-[0_12px_24px_rgba(109,76,65,0.12)]">
+                <a
+                  href={`/app/grupo/${grupo.slug}`}
+                  aria-label={`Abrir grupo ${grupo.titulo}`}
+                  class="group flex h-full flex-col justify-between rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-6 text-left shadow-[0_12px_24px_rgba(109,76,65,0.12)] transition duration-200 hover:-translate-y-0.5 hover:border-[var(--color-primary)] hover:shadow-[0_16px_30px_rgba(109,76,65,0.2)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+                >
                   <header class="space-y-1">
-                    <h2 class="text-lg font-semibold text-[var(--color-text)]">
+                    <h2 class="text-lg font-semibold text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">
                       {grupo.titulo}
                     </h2>
                     <span class="inline-flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-[var(--color-text-muted)]">
@@ -143,10 +147,7 @@ const serializedPrecacheTargets = JSON.stringify(precacheTargets);
                   )}
                   <footer class="mt-6 flex items-center justify-between text-xs text-[var(--color-text-muted)]">
                     <span>Criado em {formatDate(grupo.criado_em)}</span>
-                    <a
-                      href={`/app/grupo/${grupo.slug}`}
-                      class="inline-flex items-center gap-1 font-semibold text-[var(--color-primary)] hover:underline"
-                    >
+                    <span class="inline-flex items-center gap-1 font-semibold text-[var(--color-primary)] group-hover:underline">
                       Detalhes
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
@@ -160,9 +161,9 @@ const serializedPrecacheTargets = JSON.stringify(precacheTargets);
                           clip-rule="evenodd"
                         />
                       </svg>
-                    </a>
+                    </span>
                   </footer>
-                </article>
+                </a>
               ))
             ) : (
               <div class="col-span-full rounded-3xl border border-dashed border-[var(--color-border)] bg-[rgba(42,157,143,0.05)] px-6 py-10 text-center text-sm text-[var(--color-text-muted)]">
