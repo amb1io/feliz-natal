@@ -3,8 +3,117 @@ import Layout from "../layouts/Layout.astro";
 import Logo from "../components/Logo.astro";
 
 const currentYear = new Date().getFullYear();
+
+/** Arquivos existentes em /public: b-ball_n1.png … b-ball_n{N}.png */
+const BALL_ASSET_COUNT = 9;
+
+/**
+ * Quantas bolas exibir em cada largura — única configuração necessária.
+ * Valores crescentes (mobile → desktop). O total renderizado é o maior valor ("2xl").
+ */
+const BALLS_VISIBLE_BY_BREAKPOINT = {
+  base: 5,
+  sm: 5,
+  md: 10,
+  lg: 10,
+  xl: 15,
+  "2xl": 25,
+} as const;
+
+const BREAKPOINT_KEYS = ["base", "sm", "md", "lg", "xl", "2xl"] as const;
+
+/** Total de <img> no DOM = maior valor configurado em qualquer breakpoint. */
+const BALL_COUNT = Math.max(
+  ...BREAKPOINT_KEYS.map((key) => BALLS_VISIBLE_BY_BREAKPOINT[key]),
+);
+
+const balls = Array.from({ length: BALL_COUNT }, (_, index) => {
+  const assetIndex = (index % BALL_ASSET_COUNT) + 1;
+  return {
+    src: `/b-ball_n${assetIndex}.png`,
+    variant: index + 1,
+  };
+});
+
+const ballsVisibleConfig = { ...BALLS_VISIBLE_BY_BREAKPOINT };
+
+const secretSantaCards = [
+  {
+    title: "Crie o grupo",
+    description:
+      "Defina data do sorteio, valor do presente e regras. Tudo em um painel simples para família, amigos ou empresa.",
+    icon: "group",
+  },
+  {
+    title: "Convide a galera",
+    description:
+      "Envie convites por link, e-mail ou WhatsApp. Cada participante entra, confirma presença e monta a lista de desejos.",
+    icon: "invite",
+  },
+  {
+    title: "Sorteio automático",
+    description:
+      "O sistema sorteia sem repetir pares e avisa todo mundo na hora. Você acompanha status e pendências em tempo real.",
+    icon: "draw",
+  },
+  {
+    title: "Presente certeiro",
+    description:
+      "Veja sugestões de quem você tirou, troque mensagens secretas e organize a revelação sem quebrar a surpresa.",
+    icon: "gift",
+  },
+];
 ---
 
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap");
+
+  .hero-village-mask {
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 80' preserveAspectRatio='none'%3E%3Cpath fill='black' d='M0 80 L0 45 L40 42 L55 28 L75 40 L95 22 L120 38 L150 20 L175 35 L200 18 L230 32 L260 15 L290 30 L320 12 L350 28 L380 10 L410 26 L440 8 L470 24 L500 6 L530 22 L560 5 L590 20 L620 8 L650 24 L680 6 L710 22 L740 4 L770 18 L800 6 L830 20 L860 5 L890 16 L920 4 L950 14 L980 2 L1010 12 L1040 0 L1070 10 L1100 2 L1130 8 L1160 0 L1200 6 L1200 80 Z'/%3E%3C/svg%3E");
+    mask-size: 100% 100%;
+    mask-repeat: no-repeat;
+  }
+
+  .hero-snow {
+    background-image:
+      radial-gradient(
+        2px 2px at 20px 30px,
+        rgba(255, 255, 255, 0.9),
+        transparent
+      ),
+      radial-gradient(
+        2px 2px at 40px 70px,
+        rgba(255, 255, 255, 0.7),
+        transparent
+      ),
+      radial-gradient(
+        1.5px 1.5px at 90px 40px,
+        rgba(255, 255, 255, 0.8),
+        transparent
+      ),
+      radial-gradient(
+        2px 2px at 130px 80px,
+        rgba(255, 255, 255, 0.6),
+        transparent
+      ),
+      radial-gradient(
+        1.5px 1.5px at 160px 30px,
+        rgba(255, 255, 255, 0.85),
+        transparent
+      );
+    background-size: 200px 120px;
+  }
+
+  @keyframes b-ball-swing {
+    0%,
+    100% {
+      transform: rotate(-10deg);
+    }
+    50% {
+      transform: rotate(10deg);
+    }
+  }
+</style>
 <Layout>
   <header
     class="border-b border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)]"
@@ -36,142 +145,216 @@ const currentYear = new Date().getFullYear();
   <main
     class="min-h-screen bg-[var(--color-background)] text-[var(--color-text)]"
   >
-    <section class="relative overflow-hidden bg-[var(--color-surface)]">
+    <section
+      id="verlet"
+      class="relative min-h-[32rem] overflow-hidden bg-radial-[at_50%_0%] from-white to-[var(--color-primary)]"
+      data-balls-visible={JSON.stringify(ballsVisibleConfig)}
+    >
       <div
-        class="mx-auto flex max-w-6xl flex-col gap-10 px-6 py-16 lg:flex-row lg:items-center lg:gap-16"
+        aria-hidden="true"
+        class="pointer-events-none absolute top-0 left-0 z-10 h-[116px] w-full bg-[url('/head-ff-1.png')] bg-repeat-x [background-position:center_-20px]"
       >
-        <div class="space-y-6 text-center lg:text-left">
-          <h1
-            class="text-4xl font-semibold text-[var(--color-text)] sm:text-5xl"
-          >
-            Gerencie seu amigo secreto com poucos cliques
-          </h1>
-          <p class="text-base leading-relaxed text-[var(--color-text-muted)]">
-            Sorteios automáticos, convites inteligentes e comunicação
-            centralizada para grupos de Natal. O Feliz Natal SaaS cuida de todo
-            o fluxo para que você foque em espalhar carinho.
-          </p>
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <a
-              href="/app"
-              class="scroll-fade inline-flex items-center justify-center rounded-full bg-[var(--color-primary)] px-6 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-[var(--color-primary-foreground)] shadow-[0_14px_30px_rgba(230,57,70,0.25)] transition hover:bg-[var(--color-primary)]/90 !text-white"
-            >
-              Começar agora
-            </a>
-            <a
-              href="#servicos"
-              class="scroll-fade inline-flex items-center justify-center rounded-full border border-[var(--color-border)] px-6 py-3 text-sm font-semibold text-[var(--color-text)]"
-            >
-              Conhecer serviços
-            </a>
-          </div>
-        </div>
-        <div class="relative">
-          <div
-            class="absolute -left-6 -top-6 h-24 w-24 rounded-full bg-[var(--color-accent)]/25 blur-3xl"
-          >
-          </div>
-          <div
-            class="absolute -right-6 bottom-0 h-32 w-32 rounded-full bg-[var(--color-primary)]/20 blur-3xl"
-          >
-          </div>
-          <div
-            class="relative rounded-[2rem] border border-[var(--color-border)] bg-[var(--color-surface)] p-6 shadow-[0_18px_36px_rgba(109,76,65,0.12)]"
-          >
-            <div class="space-y-4">
-              <div
-                class="group flex items-center justify-between rounded-2xl border border-[var(--color-border)] px-4 py-3 transition-colors hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
-              >
-                <div class="flex items-center gap-3">
-                  <span
-                    class="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] transition-colors group-hover:bg-[var(--color-primary)] group-hover:text-[var(--color-primary-foreground)]"
+      </div>
+      <div
+        aria-hidden="true"
+        class="pointer-events-none absolute top-0 left-0 z-10 h-[116px] w-full bg-[url('/head-ff-1.png')] bg-repeat-x [background-position:-25px_-10px]"
+      >
+      </div>
+
+      <div
+        aria-hidden="true"
+        class="hero-snow pointer-events-none absolute inset-0 z-1 opacity-45"
+      >
+      </div>
+
+      <div
+        aria-hidden="true"
+        class="hero-village-mask pointer-events-none absolute inset-x-0 bottom-0 z-1 h-60 bg-linear-to-t from-[rgba(80,10,20,0.55)] via-[rgba(120,20,35,0.25)] to-transparent"
+      >
+      </div>
+
+      <div
+        id="balls"
+        class="pointer-events-none relative z-10 flex w-full items-start justify-evenly gap-2 px-4"
+      >
+        {
+          balls.map((ball, index) => (
+            <img
+              src={ball.src}
+              alt=""
+              width={96}
+              height={96}
+              decoding="async"
+              data-ball-index={index}
+              class="b-ball pointer-events-auto relative z-2 inline-block h-auto max-h-20 w-auto shrink-0 origin-top transition-[transform,filter,opacity] duration-300 ease-out motion-safe:hover:animate-[b-ball-swing_0.55s_ease-in-out_infinite] motion-safe:hover:drop-shadow-[0_8px_14px_rgba(230,57,70,0.35)] sm:max-h-24"
+            />
+          ))
+        }
+      </div>
+
+      <div class="relative z-4 mx-auto max-w-3xl px-6 pt-10 pb-40 text-center">
+        <h1
+          class="font-['Great_Vibes',cursive] text-[clamp(2.5rem,6vw,4.25rem)] leading-[1.15] font-normal text-white drop-shadow-[0_4px_18px_rgba(0,0,0,0.25)]"
+        >
+          Sua Noite Feliz Começa Aqui
+        </h1>
+        <p
+          class="mt-4 text-[clamp(1rem,2.2vw,1.35rem)] leading-normal font-semibold text-white/95 drop-shadow-[0_4px_18px_rgba(0,0,0,0.55)]"
+     
+        >
+          Celebre o Natal com um amigo inteligente. Organize a sua confraternização com amigos e familiares em um só lugar.
+        </p>
+      </div>
+
+      <img
+        src="/papai-noel.png"
+        alt=""
+        width={220}
+        height={280}
+        class="pointer-events-none absolute top-1/2 left-1/2 z-3 hidden h-auto w-full max-h-[min(100%,50rem)] -translate-x-1/2 -translate-y-1/2 object-contain mix-blend-screen opacity-50 sm:block"
+        loading="lazy"
+      />
+      <!-- <video
+        src="/arvore.webm"
+        autoplay
+        muted
+        loop
+        playsinline
+        class="pointer-events-none absolute right-[clamp(0.5rem,4vw,2.5rem)] bottom-0 z-11 w-[clamp(9rem,22vw,14rem)] object-contain object-bottom"
+        aria-hidden="true"></video> -->
+    </section>
+    <section class="mx-auto max-w-6xl -mt-30 z-10 relative">
+      <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {
+          secretSantaCards.map((card) => (
+            <article class="flex flex-col rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-5 py-6 text-center shadow-[0_14px_32px_rgba(109,76,65,0.14)]">
+              <span class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[rgba(230,57,70,0.1)] text-[var(--color-primary)]">
+                {card.icon === "group" && (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    class="h-7 w-7"
+                    aria-hidden="true"
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      class="h-5 w-5"
-                    >
-                      <path
-                        d="M10 2a.75.75 0 0 1 .75.75V5h2.25a.75.75 0 0 1 .525 1.282L10.53 9.75l2.995 3.468A.75.75 0 0 1 13 14.5H10.75v2.75a.75.75 0 0 1-1.5 0V14.5H7a.75.75 0 0 1-.525-1.282L9.47 9.75 6.475 6.282A.75.75 0 0 1 7 5.75h2.25V2.75A.75.75 0 0 1 10 2Z"
-                      ></path>
-                    </svg>
-                  </span>
-                  <div>
-                    <p class="text-sm font-semibold text-[var(--color-text)]">
-                      Sorteio automático
-                    </p>
-                    <p class="text-xs text-[var(--color-text-muted)]">
-                      Nunca perca a data do sorteio
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div
-                class="group flex items-center justify-between rounded-2xl border border-[var(--color-border)] px-4 py-3 transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/10"
-              >
-                <div class="flex items-center gap-3">
-                  <span
-                    class="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-accent)]/10 text-[var(--color-accent)] transition-colors group-hover:bg-[var(--color-accent)] group-hover:text-white"
+                    <path d="M4.5 6.375a4.125 4.125 0 1 1 8.25 0 4.125 4.125 0 0 1-8.25 0ZM14.25 8.625a3.375 3.375 0 1 1 6.75 0 3.375 3.375 0 0 1-6.75 0ZM1.5 19.125a7.125 7.125 0 0 1 14.25 0v.003a.75.75 0 0 1-.75.75H2.25a.75.75 0 0 1-.75-.75v-.003ZM14.25 19.125v-.003a.75.75 0 0 1 .75-.75h4.125a3.375 3.375 0 0 0 3.375-3.375v-.75a.75.75 0 0 1 1.5 0v.75a4.875 4.875 0 0 1-4.875 4.875H15a.75.75 0 0 1-.75-.75Z" />
+                  </svg>
+                )}
+                {card.icon === "invite" && (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    class="h-7 w-7"
+                    aria-hidden="true"
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      class="h-5 w-5"
-                    >
-                      <path
-                        d="M3.5 5.75A2.75 2.75 0 0 1 6.25 3h7.5A2.75 2.75 0 0 1 16.5 5.75v8.5a.75.75 0 0 1-1.168.624l-3.91-2.606a1.25 1.25 0 0 0-1.344 0l-3.91 2.606A.75.75 0 0 1 4 14.25v-8.5Z"
-                      ></path>
-                    </svg>
-                  </span>
-                  <div>
-                    <p class="text-sm font-semibold text-[var(--color-text)]">
-                      Interativo
-                    </p>
-                    <p class="text-xs text-[var(--color-text-muted)]">
-                      Converse com quem você tirou sem revelar o segredo
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div
-                class="group flex items-center justify-between rounded-2xl border border-[var(--color-border)] px-4 py-3 transition-colors hover:border-[var(--color-secondary)] hover:bg-[var(--color-secondary)]/10"
-              >
-                <div class="flex items-center gap-3">
-                  <span
-                    class="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-secondary)]/10 text-[var(--color-secondary)] transition-colors group-hover:bg-[var(--color-secondary)] group-hover:text-white"
+                    <path d="M1.5 8.67v8.58a3 3 0 0 0 3 3h15a3 3 0 0 0 3-3V8.67l-8.928 5.493a3 3 0 0 1-3.144 0L1.5 8.67Z" />
+                    <path d="M22.5 6.908V6.75a3 3 0 0 0-3-3h-15a3 3 0 0 0-3 3v.158l9.714 5.978a1.5 1.5 0 0 0 1.572 0L22.5 6.908Z" />
+                  </svg>
+                )}
+                {card.icon === "draw" && (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    class="h-7 w-7"
+                    aria-hidden="true"
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      class="h-5 w-5"
-                    >
-                      <path
-                        d="M4.25 3A2.25 2.25 0 0 0 2 5.25V15.5A1.5 1.5 0 0 0 3.5 17h13a1.5 1.5 0 0 0 1.5-1.5V5.25A2.25 2.25 0 0 0 15.75 3H4.25Zm.25 2.75c0-.138.112-.25.25-.25h10.5a.25.25 0 0 1 .25.25v8.5a.25.25 0 0 1-.25.25H4.75a.25.25 0 0 1-.25-.25v-8.5Zm2 1.5a.75.75 0 0 0 0 1.5h6.5a.75.75 0 0 0 0-1.5h-6.5Zm0 3a.75.75 0 0 0 0 1.5h3.5a.75.75 0 0 0 0-1.5h-3.5Z"
-                      ></path>
-                    </svg>
-                  </span>
-                  <div>
-                    <p
-                      class="text-sm font-semibold text-[var(--color-text)] transition-colors group-hover:text-[var(--color-secondary)]"
-                    >
-                      Lista de presentes
-                    </p>
-                    <p
-                      class="text-xs text-[var(--color-text-muted)] transition-colors group-hover:text-[var(--color-secondary)]"
-                    >
-                      Interaja com os desejos do grupo e acerte no presente
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+                    <path
+                      fill-rule="evenodd"
+                      d="M4.5 3.75a3 3 0 0 0-3 3v10.5a3 3 0 0 0 3 3h15a3 3 0 0 0 3-3V6.75a3 3 0 0 0-3-3h-15Zm4.125 3a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5Zm7.125 0a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5Zm-9.375 9.75a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5Zm7.125 0a2.25 2.25 0 1 0 0 4.5 2.25 2.25 0 0 0 0-4.5Z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                )}
+                {card.icon === "gift" && (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    class="h-7 w-7"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 7.5a2.25 2.25 0 1 0 0-4.5 2.25 2.25 0 0 0 0 4.5Z" />
+                    <path
+                      fill-rule="evenodd"
+                      d="M2.25 8.25A.75.75 0 0 1 3 7.5h18a.75.75 0 0 1 0 1.5H3a.75.75 0 0 1-.75-.75ZM6 10.5v9a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 19.5v-9H6Zm10.5 0v9a.75.75 0 0 1-1.5 0v-9h1.5Zm-7.5 0v9a.75.75 0 0 1-1.5 0v-9h1.5Z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                )}
+              </span>
+              <h3 class="mt-4 text-lg font-semibold text-[var(--color-text)]">
+                {card.title}
+              </h3>
+              <p class="mt-2 text-sm leading-relaxed text-[var(--color-text-muted)]">
+                {card.description}
+              </p>
+            </article>
+          ))
+        }
       </div>
     </section>
+
+    <script define:vars={{ ballsVisibleConfig }}>
+      const BREAKPOINT_WIDTHS = [
+        { min: 1536, key: "2xl" },
+        { min: 1280, key: "xl" },
+        { min: 1024, key: "lg" },
+        { min: 768, key: "md" },
+        { min: 640, key: "sm" },
+        { min: 0, key: "base" },
+      ];
+
+      const getActiveBreakpoint = (width) => {
+        for (const { min, key } of BREAKPOINT_WIDTHS) {
+          if (width >= min) return key;
+        }
+        return "base";
+      };
+
+      const getVisibleCount = (width, config) => {
+        const key = getActiveBreakpoint(width);
+        return config[key] ?? config.base ?? 0;
+      };
+
+      const updateVerletBalls = () => {
+        const section = document.getElementById("verlet");
+        if (!section) return;
+
+        const config =
+          typeof ballsVisibleConfig === "object"
+            ? ballsVisibleConfig
+            : JSON.parse(section.dataset.ballsVisible || "{}");
+
+        const width = window.innerWidth;
+        const activeKey = getActiveBreakpoint(width);
+        const count = getVisibleCount(width, config);
+
+        section.dataset.activeBreakpoint = activeKey;
+        section.dataset.visibleCount = String(count);
+
+        section.querySelectorAll(".b-ball").forEach((img) => {
+          const index = Number(img.dataset.ballIndex ?? -1);
+          img.hidden = index < 0 || index >= count;
+        });
+      };
+
+      let resizeListenerBound = false;
+
+      const initVerletBalls = () => {
+        updateVerletBalls();
+        if (!resizeListenerBound) {
+          window.addEventListener("resize", updateVerletBalls, {
+            passive: true,
+          });
+          resizeListenerBound = true;
+        }
+      };
+
+      initVerletBalls();
+      document.addEventListener("astro:page-load", updateVerletBalls);
+    </script>
 
     <section id="servicos" class="mx-auto max-w-6xl space-y-10 px-6 py-16">
       <header class="space-y-3 text-center">
@@ -215,8 +398,8 @@ const currentYear = new Date().getFullYear();
               dos convites para todos
             </li>
             <li class="flex items-center gap-2">
-              <span class="text-[var(--color-primary)]">•</span> Comunicação via
-              WhatsApp integrada
+              <span class="text-[var(--color-primary)]">•</span> Comunicação via WhatsApp
+              integrada
             </li>
           </ul>
           <div class="mt-auto pt-6">
@@ -301,34 +484,9 @@ const currentYear = new Date().getFullYear();
         <p
           class="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
         >
-          Produto
-        </p>
-        <ul class="mt-3 space-y-2 text-sm text-[var(--color-text-muted)]">
-          <li>
-            <a class="hover:text-[var(--color-text)]" href="#servicos"
-              >Funcionalidades</a
-            >
-          </li>
-          <li>
-            <a class="hover:text-[var(--color-text)]" href="/app#precos"
-              >Planos</a
-            >
-          </li>
-          <li>
-            <a class="hover:text-[var(--color-text)]" href="/app#faq">FAQ</a>
-          </li>
-        </ul>
-      </div>
-      <div>
-        <p
-          class="text-xs font-semibold uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
-        >
           Recursos
         </p>
         <ul class="mt-3 space-y-2 text-sm text-[var(--color-text-muted)]">
-          <li>
-            <a class="hover:text-[var(--color-text)]" href="/blog">Blog</a>
-          </li>
           <li>
             <a class="hover:text-[var(--color-text)]" href="/privacidade"
               >Privacidade</a
@@ -354,13 +512,13 @@ const currentYear = new Date().getFullYear();
           <li>
             <a
               class="hover:text-[var(--color-text)]"
-              href="mailto:contato@feliznatal.com">contato@feliznatal.com</a
+              href="mailto:contato@feliznatal.com">contato@feliz.natal.br</a
             >
           </li>
           <li>
             <a
               class="hover:text-[var(--color-text)]"
-              href="https://wa.me/5500000000000">WhatsApp</a
+              href="https://wa.me/+5511911312584">WhatsApp</a
             >
           </li>
           <li>
