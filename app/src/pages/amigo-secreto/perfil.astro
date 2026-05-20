@@ -12,7 +12,7 @@ export const prerender = false;
 
 const session = Astro.cookies.get("felizNatalSession");
 if (!session) {
-  return Astro.redirect("/app/");
+  return Astro.redirect("/amigo-secreto/");
 }
 
 const env = getEnv();
@@ -93,7 +93,7 @@ if (!env?.DB) {
       .bind(session.value)
       .first();
     if (!foundProfile) {
-      return Astro.redirect("/app/");
+      return Astro.redirect("/amigo-secreto/");
     }
     profile = foundProfile as ProfileRow;
   } catch (error) {

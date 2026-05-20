@@ -11,7 +11,7 @@ export const prerender = false;
 
 const sessionId = getSessionUserId(Astro.cookies);
 if (!sessionId) {
-  return Astro.redirect("/app/");
+  return Astro.redirect("/amigo-secreto/");
 }
 
 const env = getEnv();
@@ -24,7 +24,7 @@ if (editingSlug && env?.DB && sessionId) {
 }
 
 if (editingSlug && !groupInitialData) {
-  return Astro.redirect("/app/grupos");
+  return Astro.redirect("/amigo-secreto/grupos");
 }
 
 const isEditing = Boolean(groupInitialData);

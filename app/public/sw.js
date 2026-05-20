@@ -4,8 +4,8 @@ const OFFLINE_URL = "/offline.html";
 
 const CORE_ROUTES = [
   "/",
-  "/app",
-  "/app/grupos",
+  "/amigo-secreto",
+  "/amigo-secreto/grupos",
   OFFLINE_URL
 ];
 

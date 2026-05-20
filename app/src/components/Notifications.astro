@@ -142,7 +142,7 @@ const badgeCount = unreadCount;
             const relativeTime = formatRelativeTime(item.created_at ?? null);
             const isUnread = !item.lido;
             const hrefBase = item.grupo_slug
-              ? `/app/grupo/${item.grupo_slug}`
+              ? `/amigo-secreto/grupo/${item.grupo_slug}`
               : "#";
             const isSecretMessage =
               item.title === "Mensagem Recebida" &&

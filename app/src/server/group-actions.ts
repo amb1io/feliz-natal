@@ -126,7 +126,7 @@ async function handleSecretMessage(
 			const secretGroupTitle = ctx.grupoRow.titulo;
 			const secretGroupSlug = ctx.grupoRow.slug;
 			const secretGroupUrl = new URL(
-				`/app/grupo/${encodeURIComponent(secretGroupSlug)}?openSecret=1`,
+				`/amigo-secreto/grupo/${encodeURIComponent(secretGroupSlug)}?openSecret=1`,
 				ctx.url
 			).toString();
 
@@ -213,7 +213,7 @@ async function handleDraw(
 		const groupSlug = ctx.grupoRow.slug;
 		const revealDateValue = ctx.grupoRow.data_revelacao ?? null;
 		const revealLocationValue = ctx.grupoRow.localizacao_nome ?? ctx.grupoRow.localizacao ?? null;
-		const groupUrl = new URL(`/app/grupo/${groupSlug}`, ctx.url).toString();
+		const groupUrl = new URL(`/amigo-secreto/grupo/${groupSlug}`, ctx.url).toString();
 
 		const notificationPromises: Array<Promise<void>> = [];
 		const emailPromises: Array<Promise<unknown>> = [];
@@ -455,7 +455,7 @@ async function handleDeactivateGroup(ctx: GroupActionContext): Promise<GroupActi
 	try {
 		await deactivateGroup(ctx.env.DB, ctx.groupId);
 
-		const redirectTarget = '/app/grupos';
+		const redirectTarget = '/amigo-secreto/grupos';
 		if (isHtmxRequest(ctx.request)) {
 			return { type: 'response', response: hxRedirect(redirectTarget) };
 		}

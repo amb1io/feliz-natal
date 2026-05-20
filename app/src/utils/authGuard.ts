@@ -4,6 +4,6 @@ export const ensureClientSession = () => {
 	if (typeof window === 'undefined') return;
 	const session = getSessionCookie();
 	if (!session) {
-		window.location.replace('/app/');
+		window.location.replace('/amigo-secreto/');
 	}
 };
