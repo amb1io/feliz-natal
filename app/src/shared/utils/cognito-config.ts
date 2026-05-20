@@ -76,7 +76,7 @@ export const resolveCognitoConfig = (
 	}
 
 	return {
-		domain: readEnv(runtime, 'PUBLIC_COGNITO_DOMAIN'),
+		domain: normalizeCognitoDomain(readEnv(runtime, 'PUBLIC_COGNITO_DOMAIN')),
 		clientId: readEnv(runtime, 'PUBLIC_COGNITO_CLIENT_ID'),
 		redirectUri,
 		logoutUri: readEnv(runtime, 'PUBLIC_COGNITO_LOGOUT_URI'),
@@ -95,8 +95,14 @@ export const resolveCognitoClientSecret = (runtime?: RuntimeEnv): string | null 
 export const hasCognitoConfig = (config: CognitoConfig): boolean =>
 	Boolean(config.domain && config.clientId && config.redirectUri);
 
-const normalizeDomain = (value: string) =>
+export const normalizeCognitoDomain = (value: string) =>
 	value.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+
+/** Base URL for Cognito Hosted UI (authorize, token, logout). */
+export const cognitoBaseUrl = (domain: string): string => {
+	const host = normalizeCognitoDomain(domain);
+	return host ? `https://${host}` : '';
+};
 
 export const buildCognitoAuthorizeUrl = (
 	config: CognitoConfig,
@@ -104,7 +110,7 @@ export const buildCognitoAuthorizeUrl = (
 ): string => {
 	if (!hasCognitoConfig(config)) return '#';
 
-	const domain = normalizeDomain(config.domain);
+	const base = cognitoBaseUrl(config.domain);
 	const params = new URLSearchParams({
 		response_type: 'code',
 		client_id: config.clientId,
@@ -119,7 +125,12 @@ export const buildCognitoAuthorizeUrl = (
 		params.set('state', options.state);
 	}
 
-	return `https://${domain}/oauth2/authorize?${params.toString()}`;
+	return `${base}/oauth2/authorize?${params.toString()}`;
+};
+
+export const buildCognitoTokenUrl = (config: CognitoConfig): string => {
+	const base = cognitoBaseUrl(config.domain);
+	return base ? `${base}/oauth2/token` : '';
 };
 
 export type CognitoSocialProvider = CognitoProviderDefinition & { href: string };
