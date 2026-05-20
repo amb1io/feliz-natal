@@ -2,7 +2,6 @@
 import Layout from "../../layouts/Layout.astro";
 import AppHeader from "../../components/AppHeader.astro";
 import Footer from "../../components/Footer.astro";
-import { groups } from "../../data/groups";
 
 export const prerender = false;
 
@@ -194,7 +193,7 @@ const actionItems = [
             Grupos em destaque
           </h2>
           <a
-            href="/app/grupo-novo"
+            href="/app/grupos"
             class="scroll-fade inline-flex items-center gap-2 rounded-full border border-[rgba(230,57,70,0.2)] px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
           >
             Ver todos os grupos
@@ -213,7 +212,7 @@ const actionItems = [
         </div>
 
         <div
-          class="grid gap-5 md:grid-cols-2 xl:grid-cols-3"
+          class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3"
           hx-get="/api/grupos"
           hx-trigger="load"
           hx-swap="innerHTML"
