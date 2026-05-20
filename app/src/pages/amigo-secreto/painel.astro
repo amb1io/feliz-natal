@@ -7,7 +7,7 @@ export const prerender = false;
 
 const session = Astro.cookies.get("felizNatalSession");
 if (!session) {
-  return Astro.redirect("/app/");
+  return Astro.redirect("/amigo-secreto/");
 }
 
 const onboardingSteps = [
@@ -108,7 +108,7 @@ const actionItems = [
             </div>
 
             <a
-              href="/app/grupo-novo"
+              href="/amigo-secreto/grupo-novo"
               class="scroll-fade inline-flex w-full items-center justify-center gap-3 rounded-full bg-[var(--color-primary)] px-6 py-4 font-semibold shadow-[0_10px_24px_rgba(230,57,70,0.2)] transition hover:shadow-[0_14px_28px_rgba(230,57,70,0.28)] !text-white"
             >
               Crie seu primeiro grupo
@@ -193,7 +193,7 @@ const actionItems = [
             Grupos em destaque
           </h2>
           <a
-            href="/app/grupos"
+            href="/amigo-secreto/grupos"
             class="scroll-fade inline-flex items-center gap-2 rounded-full border border-[rgba(230,57,70,0.2)] px-4 py-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
           >
             Ver todos os grupos

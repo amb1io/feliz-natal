@@ -23,7 +23,7 @@ let errorMessage: string | null = null;
 let statusCode = 200;
 
 if (!env?.DB || !session) {
-  return Astro.redirect('/app/');
+  return Astro.redirect('/amigo-secreto/');
 }
 
 const formData = await Astro.request.formData();
@@ -415,7 +415,7 @@ if (!titulo || !dataSorteio) {
           message: 'Grupo atualizado com sucesso!',
           description: 'Redirecionando para a página do grupo...'
         };
-        redirectLocation = `/app/grupo/${slugExistente}`;
+        redirectLocation = `/amigo-secreto/grupo/${slugExistente}`;
       }
     } else {
       const grupoId = crypto.randomUUID();
@@ -444,7 +444,7 @@ if (!titulo || !dataSorteio) {
       };
 
       const slug = await resolveUniqueSlug(initialSlug);
-      const groupUrl = new URL(`/app/grupo/${slug}`, Astro.url).toString();
+      const groupUrl = new URL(`/amigo-secreto/grupo/${slug}`, Astro.url).toString();
 
       const usuarioExistente = await db
         .prepare('SELECT id, nome, email FROM usuario WHERE id = ?')
@@ -569,7 +569,7 @@ if (!titulo || !dataSorteio) {
         message: 'Grupo criado com sucesso!',
         description: 'Redirecionando para a página do grupo...'
       };
-      redirectLocation = `/app/grupo/${slug}`;
+      redirectLocation = `/amigo-secreto/grupo/${slug}`;
     }
   } catch (error) {
     console.error('Erro ao criar grupo:', error);

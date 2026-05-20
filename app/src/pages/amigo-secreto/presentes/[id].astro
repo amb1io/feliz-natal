@@ -9,14 +9,14 @@ export const prerender = false;
 const sessionCookie = Astro.cookies.get("felizNatalSession");
 const sessionId = sessionCookie?.value ?? null;
 if (!sessionId) {
-  return Astro.redirect("/app/");
+  return Astro.redirect("/amigo-secreto/");
 }
 
 const env = getEnv();
 
 const requestedUserId = Astro.params.id?.trim();
 if (!requestedUserId) {
-  return Astro.redirect("/app/presentes");
+  return Astro.redirect("/amigo-secreto/presentes");
 }
 
 type PresentRecord = {

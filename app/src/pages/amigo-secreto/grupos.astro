@@ -9,7 +9,7 @@ export const prerender = false;
 
 const session = Astro.cookies.get("felizNatalSession");
 if (!session) {
-  return Astro.redirect("/app/");
+  return Astro.redirect("/amigo-secreto/");
 }
 
 const env = getEnv();
@@ -80,17 +80,17 @@ const previousPage = Math.max(1, currentPage - 1);
 const nextPage = currentPage + 1;
 
 const staticAppRoutes = [
-  "/app/",
-  "/app/grupos",
-  "/app/grupo-novo",
-  "/app/painel",
-  "/app/presentes",
+  "/amigo-secreto/",
+  "/amigo-secreto/grupos",
+  "/amigo-secreto/grupo-novo",
+  "/amigo-secreto/painel",
+  "/amigo-secreto/presentes",
 ];
 
 const precacheTargets = Array.from(
   new Set([
     ...staticAppRoutes,
-    ...grupos.map((grupo) => `/app/grupo/${grupo.slug}`),
+    ...grupos.map((grupo) => `/amigo-secreto/grupo/${grupo.slug}`),
   ])
 );
 
@@ -142,7 +142,7 @@ const serializedPrecacheTargets = JSON.stringify(precacheTargets);
             {
               hasPrevious ? (
                 <a
-                  href={`/app/grupos?page=${previousPage}`}
+                  href={`/amigo-secreto/grupos?page=${previousPage}`}
                   class="scroll-fade inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] px-4 py-2 font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
                 >
                   <svg
@@ -181,7 +181,7 @@ const serializedPrecacheTargets = JSON.stringify(precacheTargets);
             {
               hasNext ? (
                 <a
-                  href={`/app/grupos?page=${nextPage}`}
+                  href={`/amigo-secreto/grupos?page=${nextPage}`}
                   class="scroll-fade inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] px-4 py-2 font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
                 >
                   Próxima

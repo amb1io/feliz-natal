@@ -3,17 +3,17 @@ import Logo from "./Logo.astro";
 import Notifications from "./Notifications.astro";
 
 const menuItems = [
-  { label: "Criar Grupo", href: "/app/grupo-novo", variant: "primary" },
-  { label: "Meus Grupos", href: "/app/grupos", variant: "default" },
-  { label: "Lista de Desejos", href: "/app/presentes", variant: "default" },
-  { label: "Perfil", href: "/app/perfil", variant: "default" },
+  { label: "Criar Grupo", href: "/amigo-secreto/grupo-novo", variant: "primary" },
+  { label: "Meus Grupos", href: "/amigo-secreto/grupos", variant: "default" },
+  { label: "Lista de Desejos", href: "/amigo-secreto/presentes", variant: "default" },
+  { label: "Perfil", href: "/amigo-secreto/perfil", variant: "default" },
 ];
 
 const logout = () => {
   if (typeof document !== "undefined") {
     document.cookie = "felizNatalSession=; path=/; max-age=0; SameSite=Lax";
   }
-  return "/app/";
+  return "/amigo-secreto/";
 };
 ---
 
@@ -188,7 +188,7 @@ const logout = () => {
     if (typeof window !== "undefined") {
       const handleLogout = () => {
         document.cookie = "felizNatalSession=; path=/; max-age=0; SameSite=Lax";
-        window.location.replace("/app/");
+        window.location.replace("/amigo-secreto/");
       };
       document.querySelectorAll("[data-logout-button]").forEach((button) => {
         button.addEventListener("click", handleLogout);

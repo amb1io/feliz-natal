@@ -19,7 +19,7 @@ window.participantModal = function participantModal() {
 
 			if (!payload) return;
 			if (payload.userId) {
-				window.location.href = `/app/presentes/${encodeURIComponent(payload.userId)}`;
+				window.location.href = `/amigo-secreto/presentes/${encodeURIComponent(payload.userId)}`;
 				return;
 			}
 			this.participant = payload;
