@@ -1,0 +1,156 @@
+---
+import Layout from "../layouts/Layout.astro";
+---
+
+<Layout>
+  <main class="mx-auto max-w-4xl px-6 py-16 text-[var(--color-text)]">
+    <header class="mb-10 space-y-3">
+      <p
+        class="text-xs font-semibold uppercase tracking-[0.35em] text-[var(--color-text-muted)]"
+      >
+        Central de ajuda
+      </p>
+      <h1 class="text-3xl font-semibold">Como funciona o Feliz Natal</h1>
+      <p class="text-sm text-[var(--color-text-muted)]">
+        Guia rápido para organizar seu amigo secreto: da criação do grupo ao
+        sorteio e à troca de presentes.
+      </p>
+    </header>
+
+    <section class="space-y-6">
+      <article
+        class="space-y-3 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5"
+      >
+        <h2 class="text-xl font-semibold">1. Entre na plataforma</h2>
+        <p class="text-sm leading-relaxed text-[var(--color-text-muted)]">
+          Acesse <a class="text-[var(--color-primary)] underline" href="/app"
+            >/app</a
+          > e faça login com Google, Microsoft, Facebook ou outro provedor
+          disponível. Após a autenticação você chega ao painel, onde gerencia
+          perfil, grupos e notificações.
+        </p>
+      </article>
+
+      <article
+        class="space-y-3 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5"
+      >
+        <h2 class="text-xl font-semibold">2. Crie um grupo</h2>
+        <p class="text-sm leading-relaxed text-[var(--color-text-muted)]">
+          No painel, cadastre um novo amigo secreto informando nome do grupo,
+          data do sorteio, valor sugerido do presente e regras do encontro. O
+          organizador acompanha tudo na página do grupo e pode editar os dados
+          enquanto o sorteio ainda não foi realizado.
+        </p>
+      </article>
+
+      <article
+        class="space-y-3 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5"
+      >
+        <h2 class="text-xl font-semibold">3. Convide os participantes</h2>
+        <p class="text-sm leading-relaxed text-[var(--color-text-muted)]">
+          Envie convites por link, e-mail ou WhatsApp. Cada convidado recebe um
+          link personalizado (por exemplo, <code>/convite?token=…</code>) para
+          aceitar o convite e entrar no grupo. Todos precisam confirmar presença
+          antes do sorteio.
+        </p>
+      </article>
+
+      <article
+        class="space-y-3 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5"
+      >
+        <h2 class="text-xl font-semibold">4. Monte a lista de desejos</h2>
+        <p class="text-sm leading-relaxed text-[var(--color-text-muted)]">
+          Cada participante cadastra sugestões de presentes no perfil ou na área
+          de presentes. Assim, quem você tirou no sorteio consegue ver ideias e
+          faixa de preço sem quebrar a surpresa de quem deu a dica.
+        </p>
+      </article>
+
+      <article
+        class="space-y-3 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5"
+      >
+        <h2 class="text-xl font-semibold">5. Realize o sorteio</h2>
+        <p class="text-sm leading-relaxed text-[var(--color-text-muted)]">
+          Quando todos estiverem confirmados, o organizador dispara o sorteio
+          automático na página do grupo. O sistema emparelha participantes sem
+          repetir pares e avisa cada um por e-mail ou WhatsApp. Só depois do
+          sorteio cada pessoa descobre quem tirou.
+        </p>
+      </article>
+
+      <article
+        class="space-y-3 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5"
+      >
+        <h2 class="text-xl font-semibold">6. Troque mensagens e organize o dia</h2>
+        <p class="text-sm leading-relaxed text-[var(--color-text-muted)]">
+          No grupo há mural para avisos gerais e mensagens secretas para quem
+          você tirou — sem revelar o sorteio para os demais. Use o painel para
+          acompanhar pendências, respostas e o clima da confraternização até a
+          data combinada.
+        </p>
+      </article>
+
+      <article
+        class="space-y-3 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5"
+      >
+        <h2 class="text-xl font-semibold">Perguntas frequentes</h2>
+        <dl class="space-y-4 text-sm leading-relaxed text-[var(--color-text-muted)]">
+          <div>
+            <dt class="font-semibold text-[var(--color-text)]">
+              Quem pode ver quem eu tirei?
+            </dt>
+            <dd class="mt-1">
+              Apenas você. O organizador vê status do grupo, mas não o par de
+              cada participante após o sorteio.
+            </dd>
+          </div>
+          <div>
+            <dt class="font-semibold text-[var(--color-text)]">
+              Posso participar de vários grupos?
+            </dt>
+            <dd class="mt-1">
+              Sim. Em <a class="text-[var(--color-primary)] underline" href="/app/grupos"
+                >/app/grupos</a
+              > aparecem todos os grupos em que você organiza ou participa.
+            </dd>
+          </div>
+          <div>
+            <dt class="font-semibold text-[var(--color-text)]">
+              O convite não abre ou deu erro
+            </dt>
+            <dd class="mt-1">
+              Verifique se o link está completo e se você está logado com o
+              e-mail ou telefone do convite. Links inválidos ou expirados
+              precisam de um novo convite do organizador.
+            </dd>
+          </div>
+        </dl>
+      </article>
+
+      <article
+        class="space-y-3 rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-5"
+      >
+        <h2 class="text-xl font-semibold">Precisa de ajuda?</h2>
+        <p class="text-sm leading-relaxed text-[var(--color-text-muted)]">
+          Escreva para
+          <a
+            class="text-[var(--color-primary)] underline"
+            href="mailto:contato@feliz.natal.br">contato@feliz.natal.br</a
+          >
+          ou fale pelo
+          <a
+            class="text-[var(--color-primary)] underline"
+            href="https://wa.me/+5511911312584">WhatsApp</a
+          >. Consulte também os
+          <a class="text-[var(--color-primary)] underline" href="/termos"
+            >Termos de Uso</a
+          >
+          e a
+          <a class="text-[var(--color-primary)] underline" href="/privacidade"
+            >Política de Privacidade</a
+          >.
+        </p>
+      </article>
+    </section>
+  </main>
+</Layout>
