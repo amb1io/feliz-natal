@@ -2,6 +2,7 @@
 import Layout from "../../layouts/Layout.astro";
 import AppHeader from "../../components/AppHeader.astro";
 import Footer from "../../components/Footer.astro";
+import GroupCard from "../../components/GroupCard.astro";
 import { getEnv } from "../../server/request-context";
 
 export const prerender = false;
@@ -78,15 +79,6 @@ const hasNext = currentPage < totalPaginas;
 const previousPage = Math.max(1, currentPage - 1);
 const nextPage = currentPage + 1;
 
-const formatDate = (value?: string | null) =>
-  value
-    ? new Date(value).toLocaleDateString("pt-BR", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      })
-    : "Data desconhecida";
-
 const staticAppRoutes = [
   "/app/",
   "/app/grupos",
@@ -124,46 +116,13 @@ const serializedPrecacheTargets = JSON.stringify(precacheTargets);
           {
             grupos.length ? (
               grupos.map((grupo) => (
-                <a
-                  href={`/app/grupo/${grupo.slug}`}
-                  aria-label={`Abrir grupo ${grupo.titulo}`}
-                  class="group flex h-full flex-col justify-between rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-6 text-left shadow-[0_12px_24px_rgba(109,76,65,0.12)] transition duration-200 hover:-translate-y-0.5 hover:border-[var(--color-primary)] hover:shadow-[0_16px_30px_rgba(109,76,65,0.2)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
-                >
-                  <header class="space-y-1">
-                    <h2 class="text-lg font-semibold text-[var(--color-text)] transition-colors group-hover:text-[var(--color-primary)]">
-                      {grupo.titulo}
-                    </h2>
-                    <span class="inline-flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-[var(--color-text-muted)]">
-                      Status:{" "}
-                      <span class="font-semibold text-[var(--color-primary)]">
-                        {grupo.status}
-                      </span>
-                    </span>
-                  </header>
-                  {grupo.descricao && (
-                    <p class="mt-4 text-sm text-[var(--color-text-muted)]">
-                      {grupo.descricao}
-                    </p>
-                  )}
-                  <footer class="mt-6 flex items-center justify-between text-xs text-[var(--color-text-muted)]">
-                    <span>Criado em {formatDate(grupo.criado_em)}</span>
-                    <span class="inline-flex items-center gap-1 font-semibold text-[var(--color-primary)] group-hover:underline">
-                      Detalhes
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                        class="h-4 w-4"
-                      >
-                        <path
-                          fill-rule="evenodd"
-                          d="M3 10a.75.75 0 0 1 .75-.75h9.19l-2.47-2.47a.75.75 0 0 1 1.06-1.06l3.75 3.75a.75.75 0 0 1 0 1.06l-3.75 3.75a.75.75 0 1 1-1.06-1.06l2.47-2.47H3.75A.75.75 0 0 1 3 10Z"
-                          clip-rule="evenodd"
-                        />
-                      </svg>
-                    </span>
-                  </footer>
-                </a>
+                <GroupCard
+                  slug={grupo.slug}
+                  titulo={grupo.titulo}
+                  descricao={grupo.descricao}
+                  status={grupo.status}
+                  criado_em={grupo.criado_em}
+                />
               ))
             ) : (
               <div class="col-span-full rounded-3xl border border-dashed border-[var(--color-border)] bg-[rgba(42,157,143,0.05)] px-6 py-10 text-center text-sm text-[var(--color-text-muted)]">
