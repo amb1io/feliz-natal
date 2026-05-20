@@ -10,7 +10,7 @@ This repository contains the Feliz Natal intranet built with **Astro** alongside
 /
 ├── public/                  # Static assets
 ├── src/                     # Astro application (pages, components, data)
-│   ├── pages/app/index.astro  # Cognito login screen
+│   ├── pages/amigo-secreto/index.astro  # Cognito login screen
 │   ├── pages/auth/callback.astro
 │   └── ...
 ├── cognito-template.yaml    # CloudFormation stack for Cognito + IdPs
@@ -33,8 +33,8 @@ npm run preview
 
 Key screens:
 
-- `src/pages/app/index.astro` — SaaS login hub that reads Cognito settings from environment variables and redirects users to the Hosted UI with the selected identity provider.
-- `src/pages/auth/callback.astro` — Displays the authorization code returned by Cognito and guides the user back to the painel (`/app/painel`). Replace this with custom token exchange logic when you implement your backend.
+- `src/pages/amigo-secreto/index.astro` — SaaS login hub that reads Cognito settings from environment variables and redirects users to the Hosted UI with the selected identity provider.
+- `src/pages/auth/callback.astro` — Displays the authorization code returned by Cognito and guides the user back to the painel (`/amigo-secreto/painel`). Replace this with custom token exchange logic when you implement your backend.
 
 ---
 
@@ -109,7 +109,7 @@ Restart `npm run dev` after modifying environment variables.
 
 - Do not commit real secrets—keep `.env` out of version control.
 - Rotate social app credentials regularly and consider AWS Secrets Manager for production storage.
-- O callback (`src/pages/auth/callback.astro`) grava o cookie `felizNatalSession` no navegador. Cada página protegida dentro de `/app/` (exceto o `index.astro`) valida esse cookie no lado do servidor e redireciona visitantes não autenticados de volta para `/app/` antes de renderizar o conteúdo.
+- O callback (`src/pages/auth/callback.astro`) grava o cookie `felizNatalSession` no navegador. Cada página protegida dentro de `/amigo-secreto/` (exceto o `index.astro`) valida esse cookie no lado do servidor e redireciona visitantes não autenticados de volta para `/amigo-secreto/` antes de renderizar o conteúdo.
 - Enhance `src/pages/auth/callback.astro` with server communication to exchange the authorization code for tokens and store sessions securely.
 - Remove the `sample-client.html` playground from production builds if not required.
 

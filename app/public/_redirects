@@ -1,0 +1,3 @@
+/app    /amigo-secreto    301
+/app/   /amigo-secreto/   301
+/app/*  /amigo-secreto/:splat  301

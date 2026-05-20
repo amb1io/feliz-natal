@@ -124,7 +124,7 @@ if (session) {
     const userId = session;
 
     if (invite.acceptedAt) {
-      return Astro.redirect(`/app/grupo/${invite.groupSlug}`);
+      return Astro.redirect(`/amigo-secreto/grupo/${invite.groupSlug}`);
     }
 
     const existingUser = await db
@@ -227,7 +227,7 @@ if (session) {
       );
     }
 
-    return Astro.redirect(`/app/grupo/${invite.groupSlug}`);
+    return Astro.redirect(`/amigo-secreto/grupo/${invite.groupSlug}`);
   } catch (error) {
     console.error("Erro ao aceitar convite:", error);
     acceptanceError =

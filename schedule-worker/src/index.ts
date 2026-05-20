@@ -287,12 +287,12 @@ const buildGroupUrl = (env: Env, slug: string) => {
   const base = env.SITE_URL?.trim() || DEFAULT_SITE_URL;
   try {
     const url = new URL(base);
-    url.pathname = `/app/grupo/${slug}`;
+    url.pathname = `/amigo-secreto/grupo/${slug}`;
     url.search = "";
     url.hash = "";
     return url.toString();
   } catch {
-    return `${DEFAULT_SITE_URL.replace(/\/$/, "")}/app/grupo/${slug}`;
+    return `${DEFAULT_SITE_URL.replace(/\/$/, "")}/amigo-secreto/grupo/${slug}`;
   }
 };
 

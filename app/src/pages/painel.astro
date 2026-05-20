@@ -4,8 +4,8 @@ export const prerender = false;
 const session = Astro.cookies.get('felizNatalSession');
 
 if (!session) {
-	return Astro.redirect('/app/');
+	return Astro.redirect('/amigo-secreto/');
 }
 
-return Astro.redirect('/app/painel');
+return Astro.redirect('/amigo-secreto/painel');
 ---

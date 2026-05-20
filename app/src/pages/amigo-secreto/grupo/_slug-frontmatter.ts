@@ -17,7 +17,7 @@ export async function loadSlugPageContext(context: APIContext) {
 	const slug = Astro.params.slug;
 
 	if (!userId) {
-		return { redirect: '/app/' as const };
+		return { redirect: '/amigo-secreto/' as const };
 	}
 
 	if (!env?.DB || !slug) {
@@ -42,7 +42,7 @@ export async function loadSlugPageContext(context: APIContext) {
 
 	const groupStatusValue = grupoRow.status ?? 'indefinido';
 	if (groupStatusValue !== 'ativo') {
-		return { redirect: '/app/grupos' as const };
+		return { redirect: '/amigo-secreto/grupos' as const };
 	}
 
 	const organizerId = grupoRow.criado_por ?? null;
@@ -54,7 +54,7 @@ export async function loadSlugPageContext(context: APIContext) {
 	}
 
 	if (!isParticipantUser) {
-		return { redirect: '/app/' as const };
+		return { redirect: '/amigo-secreto/' as const };
 	}
 
 	const canEdit = isOrganizer;
