@@ -127,7 +127,7 @@ const badgeCount = unreadCount;
     x-transition:leave-start="opacity-100 translate-y-0"
     x-transition:leave-end="opacity-0 -translate-y-2"
     @click.outside="open = false"
-    class="absolute right-0 top-full z-30 mt-4 w-screen max-w-[22rem] overflow-hidden rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_12px_24px_rgba(109,76,65,0.12)] backdrop-blur"
+    class="fixed left-1/2 top-[4.25rem] z-50 w-[min(22rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-3xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[0_12px_24px_rgba(109,76,65,0.12)] backdrop-blur sm:absolute sm:right-0 sm:left-auto sm:top-full sm:z-30 sm:mt-4 sm:w-screen sm:max-w-[22rem] sm:translate-x-0"
   >
     <div
       class="flex items-center justify-between border-b border-[rgba(148,163,184,0.18)] px-5 py-4"

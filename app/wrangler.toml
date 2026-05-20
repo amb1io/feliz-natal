@@ -5,7 +5,7 @@ compatibility_flags = [ "nodejs_compat" ]
 
 [vars]
 # Public/front-end/runtime configuration (safe to version)
-PUBLIC_COGNITO_DOMAIN = "feliz-natal-user-pool-940943049009.auth.sa-east-1.amazoncognito.com"
+PUBLIC_COGNITO_DOMAIN = "login.feliz.natal.br"
 PUBLIC_COGNITO_CLIENT_ID = "1bcmflbijdc71fuse281k2al9b"
 PUBLIC_COGNITO_REDIRECT_URI = "https://feliz.natal.br/auth/callback"
 PUBLIC_COGNITO_LOGOUT_URI = "https://feliz.natal.br/"

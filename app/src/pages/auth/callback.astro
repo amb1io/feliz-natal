@@ -1,6 +1,7 @@
 ---
 import { sendWelcomeEmail } from '../../shared/utils/email';
 import {
+	buildCognitoTokenUrl,
 	resolveCognitoClientSecret,
 	resolveCognitoConfig,
 } from '../../shared/utils/cognito-config';
@@ -134,20 +135,24 @@ if (errorParam) {
     const cognitoConfig = resolveCognitoConfig(env, {
       requestUrl: Astro.request.url,
     });
-    const cognitoDomain = cognitoConfig.domain;
     const cognitoClientId = cognitoConfig.clientId;
     const cognitoRedirectUri = cognitoConfig.redirectUri;
     const cognitoClientSecret = resolveCognitoClientSecret(env);
 
     console.log("asdad11");
 
-    if (!cognitoDomain || !cognitoClientId) {
+    if (!cognitoConfig.domain || !cognitoClientId) {
       throw new Error(
         "Configuração do Cognito ausente. Verifique as variáveis de ambiente."
       );
     }
 
-    const tokenEndpoint = `https://${cognitoDomain}/oauth2/token`;
+    const tokenEndpoint = buildCognitoTokenUrl(cognitoConfig);
+    if (!tokenEndpoint) {
+      throw new Error(
+        "Domínio do Cognito inválido. Verifique PUBLIC_COGNITO_DOMAIN."
+      );
+    }
     console.log(tokenEndpoint);
     const tokenBody = new URLSearchParams({
       grant_type: "authorization_code",
