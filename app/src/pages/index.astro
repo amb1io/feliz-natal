@@ -3,8 +3,94 @@ import Layout from "../layouts/Layout.astro";
 import Logo from "../components/Logo.astro";
 
 const currentYear = new Date().getFullYear();
+
+/** Arquivos existentes em /public: b-ball_n1.png … b-ball_n{N}.png */
+const BALL_ASSET_COUNT = 9;
+
+/**
+ * Quantas bolas exibir em cada largura — única configuração necessária.
+ * Valores crescentes (mobile → desktop). O total renderizado é o maior valor ("2xl").
+ */
+const BALLS_VISIBLE_BY_BREAKPOINT = {
+  base: 5,
+  sm: 5,
+  md: 10,
+  lg: 10,
+  xl: 15,
+  "2xl": 25,
+} as const;
+
+const BREAKPOINT_KEYS = ["base", "sm", "md", "lg", "xl", "2xl"] as const;
+
+/** Total de <img> no DOM = maior valor configurado em qualquer breakpoint. */
+const BALL_COUNT = Math.max(
+  ...BREAKPOINT_KEYS.map((key) => BALLS_VISIBLE_BY_BREAKPOINT[key]),
+);
+
+const balls = Array.from({ length: BALL_COUNT }, (_, index) => {
+  const assetIndex = (index % BALL_ASSET_COUNT) + 1;
+  return {
+    src: `/b-ball_n${assetIndex}.png`,
+    variant: index + 1,
+  };
+});
+
+const ballsVisibleConfig = { ...BALLS_VISIBLE_BY_BREAKPOINT };
 ---
 
+<style>
+  #verlet #balls {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-evenly;
+    gap: 0.5rem;
+    padding-inline: 1rem;
+    width:;
+  }
+  #verlet::before {
+    content: "";
+    display: block;
+    height: 116px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    width: 100%;
+    background:
+      url("/head-ff-1.png") repeat-x center -20px,
+      url("/head-ff-1.png") repeat-x -25px -10px;
+  }
+  .b-ball {
+    position: relative;
+    z-index: 2;
+    transform-origin: 50% 0%;
+    transition:
+      transform 0.25s ease,
+      filter 0.25s ease,
+      opacity 0.2s ease;
+  }
+
+  .b-ball[hidden] {
+    display: none;
+  }
+
+  @keyframes b-ball-swing {
+    0%,
+    100% {
+      transform: rotate(-10deg);
+    }
+    50% {
+      transform: rotate(10deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .b-ball:hover {
+      animation: b-ball-swing 0.55s ease-in-out infinite;
+      filter: drop-shadow(0 8px 14px rgba(230, 57, 70, 0.35));
+    }
+  }
+</style>
 <Layout>
   <header
     class="border-b border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)]"
@@ -36,6 +122,94 @@ const currentYear = new Date().getFullYear();
   <main
     class="min-h-screen bg-[var(--color-background)] text-[var(--color-text)]"
   >
+    <section
+      id="verlet"
+      class="relative min-h-[450px] bg-radial-[at_50%_0%] from-red-300 to-[var(--color-primary)]"
+      data-balls-visible={JSON.stringify(ballsVisibleConfig)}
+    >
+      <div id="balls">
+        {
+          balls.map((ball, index) => (
+            <img
+              src={ball.src}
+              alt=""
+              width={96}
+              height={96}
+              decoding="async"
+              data-ball-index={index}
+              class="b-ball inline-block h-auto max-h-20 w-auto shrink-0 sm:max-h-24"
+            />
+          ))
+        }
+      </div>
+      <!-- <img src="/papai-noel.png" alt="" class="absolute bottom-0 left-0 w-3xs"> -->
+      <video
+        src="/arvore.webm"
+        autoplay
+        muted
+        loop
+        class="w-3xs absolute bottom-0 right-10"></video>
+    </section>
+
+    <script define:vars={{ ballsVisibleConfig }}>
+      const BREAKPOINT_WIDTHS = [
+        { min: 1536, key: "2xl" },
+        { min: 1280, key: "xl" },
+        { min: 1024, key: "lg" },
+        { min: 768, key: "md" },
+        { min: 640, key: "sm" },
+        { min: 0, key: "base" },
+      ];
+
+      const getActiveBreakpoint = (width) => {
+        for (const { min, key } of BREAKPOINT_WIDTHS) {
+          if (width >= min) return key;
+        }
+        return "base";
+      };
+
+      const getVisibleCount = (width, config) => {
+        const key = getActiveBreakpoint(width);
+        return config[key] ?? config.base ?? 0;
+      };
+
+      const updateVerletBalls = () => {
+        const section = document.getElementById("verlet");
+        if (!section) return;
+
+        const config =
+          typeof ballsVisibleConfig === "object"
+            ? ballsVisibleConfig
+            : JSON.parse(section.dataset.ballsVisible || "{}");
+
+        const width = window.innerWidth;
+        const activeKey = getActiveBreakpoint(width);
+        const count = getVisibleCount(width, config);
+
+        section.dataset.activeBreakpoint = activeKey;
+        section.dataset.visibleCount = String(count);
+
+        section.querySelectorAll(".b-ball").forEach((img) => {
+          const index = Number(img.dataset.ballIndex ?? -1);
+          img.hidden = index < 0 || index >= count;
+        });
+      };
+
+      let resizeListenerBound = false;
+
+      const initVerletBalls = () => {
+        updateVerletBalls();
+        if (!resizeListenerBound) {
+          window.addEventListener("resize", updateVerletBalls, {
+            passive: true,
+          });
+          resizeListenerBound = true;
+        }
+      };
+
+      initVerletBalls();
+      document.addEventListener("astro:page-load", updateVerletBalls);
+    </script>
     <section class="relative overflow-hidden bg-[var(--color-surface)]">
       <div
         class="mx-auto flex max-w-6xl flex-col gap-10 px-6 py-16 lg:flex-row lg:items-center lg:gap-16"
@@ -215,8 +389,8 @@ const currentYear = new Date().getFullYear();
               dos convites para todos
             </li>
             <li class="flex items-center gap-2">
-              <span class="text-[var(--color-primary)]">•</span> Comunicação via
-              WhatsApp integrada
+              <span class="text-[var(--color-primary)]">•</span> Comunicação via WhatsApp
+              integrada
             </li>
           </ul>
           <div class="mt-auto pt-6">
