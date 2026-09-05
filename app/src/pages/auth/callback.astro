@@ -5,6 +5,13 @@ import {
 	resolveCognitoClientSecret,
 	resolveCognitoConfig,
 } from '../../shared/utils/cognito-config';
+import {
+	countUsuariosTodayAndTotal,
+	notifyTelegramSafely,
+	saoPauloDateIso,
+	templateAppError,
+	templateNewUser,
+} from '../../shared/utils/telegram';
 import { getEnv } from '../../server/request-context';
 
 export const prerender = false;
@@ -119,6 +126,7 @@ const state = params.get("state");
 
 let errorMessage: string | null = null;
 let welcomeEmailTarget: string | null = null;
+let isNewUser = false;
 
 if (errorParam) {
   const decodedDescription = errorDescription
@@ -340,6 +348,7 @@ if (errorParam) {
               .run();
           }
           welcomeEmailTarget = userEmail;
+          isNewUser = true;
         }
       } else {
         if (hasPhoneColumn && hasLoginFieldColumn) {
@@ -355,6 +364,7 @@ if (errorParam) {
             .bind(userId, resolvedName, userEmail, agora)
             .run();
         }
+        isNewUser = true;
       }
 
       if (hasLinkedAccountsTable) {
@@ -404,6 +414,25 @@ if (errorParam) {
       });
     }
 
+    if (isNewUser && env?.DB) {
+      try {
+        const { todayCount, totalCount } = await countUsuariosTodayAndTotal(
+          env.DB,
+          saoPauloDateIso()
+        );
+        await notifyTelegramSafely(
+          env as Record<string, unknown>,
+          templateNewUser({
+            label: resolvedName || welcomeEmailTarget || userId,
+            todayCount,
+            totalCount,
+          })
+        );
+      } catch (notifyError) {
+        console.warn("Falha ao notificar cadastro no Telegram:", notifyError);
+      }
+    }
+
     const requestUrl = new URL(Astro.request.url);
     Astro.cookies.set("felizNatalSession", userId, {
       path: "/",
@@ -418,9 +447,16 @@ if (errorParam) {
   } catch (error) {
     console.error("Erro ao processar o callback de autenticação:", error);
     errorMessage = "Não foi possível validar o login. Tente novamente.";
+    const detail = error instanceof Error ? error.message : "erro desconhecido";
+    await notifyTelegramSafely(
+      (env ?? {}) as Record<string, unknown>,
+      templateAppError({
+        where: "auth/callback",
+        detail: detail.slice(0, 200),
+      })
+    );
   }
 }
-console.log("sadsada");
 ---
 
 <html lang="pt-BR">
