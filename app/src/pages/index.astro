@@ -2,8 +2,6 @@
 import Layout from "../layouts/Layout.astro";
 import Logo from "../components/Logo.astro";
 
-const currentYear = new Date().getFullYear();
-
 /** Arquivos existentes em /public: b-ball_n1.png … b-ball_n{N}.png */
 const BALL_ASSET_COUNT = 9;
 
@@ -530,9 +528,23 @@ const secretSantaCards = [
       </div>
     </div>
     <div
-      class="border-t border-[var(--color-border)] bg-[var(--color-surface-muted)] px-6 py-6 text-center text-xs uppercase tracking-[0.3em] text-[var(--color-text-muted)]"
+      class="border-t border-[var(--color-border)] bg-[var(--color-surface-muted)] flex justify-center px-6 py-6"
     >
-      © {currentYear} Feliz Natal SaaS · Feito com carinho no Polo Norte
+      <a
+        href="https://amb1.io"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="amb1"
+        class="inline-flex opacity-80 transition-opacity hover:opacity-100"
+      >
+        <img
+          src="/amb1-logo.svg"
+          alt="amb1"
+          width="40"
+          height="47"
+          class="h-10 w-auto"
+        />
+      </a>
     </div>
   </footer>
 </Layout>
