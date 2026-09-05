@@ -1,5 +1,12 @@
 import { sendDrawCompletedEmail } from "./email";
 import { sendDrawCompletedWhatsApp } from "./whatsapp";
+import {
+  fetchDailyDigestStats,
+  notifyTelegramSafely,
+  saoPauloDateIso,
+  templateDailyDigest,
+  templateDrawError,
+} from "./telegram";
 
 type GroupRow = {
   id: string;
@@ -27,7 +34,13 @@ export default {
 
   async scheduled(event: ScheduledController, env: Env, ctx: ExecutionContext) {
     const runDate = new Date(event.scheduledTime ?? Date.now());
-    const targetDate = runDate.toISOString().slice(0, 10);
+    const targetDate = saoPauloDateIso(runDate);
+
+    ctx.waitUntil(
+      sendDailyDigest(env, targetDate).catch((error) => {
+        console.error("Erro ao enviar digest Telegram:", error);
+      })
+    );
 
     const groups = await fetchGroupsForDate(env, targetDate);
     if (!groups.length) {
@@ -41,6 +54,15 @@ export default {
           console.error(
             `Erro ao processar sorteio automático do grupo ${group.id}:`,
             error
+          );
+          const detail =
+            error instanceof Error ? error.message : "erro desconhecido";
+          return notifyTelegramSafely(
+            env,
+            templateDrawError({
+              groupLabel: group.titulo || group.slug || group.id,
+              reason: detail.slice(0, 200),
+            })
           );
         })
       );
@@ -71,6 +93,17 @@ type Env = {
   WHATSAPP_SITE_BASE_URL?: string;
   WHATSAPP_HEADER_IMAGE_URL?: string;
   WHATSAPP_DEFAULT_COUNTRY_CODE?: string;
+  botfather_token?: string;
+  BOTFATHER_TOKEN?: string;
+  TELEGRAM_BOT_TOKEN?: string;
+  my_telegram?: string;
+  MY_TELEGRAM?: string;
+  TELEGRAM_USERNAME?: string;
+};
+
+const sendDailyDigest = async (env: Env, isoDate: string) => {
+  const stats = await fetchDailyDigestStats(env.DB, isoDate);
+  await notifyTelegramSafely(env, templateDailyDigest(stats));
 };
 
 const fetchGroupsForDate = async (env: Env, isoDate: string) => {
@@ -91,6 +124,13 @@ const runAutomaticDraw = async (env: Env, group: GroupRow) => {
     console.warn(
       `Grupo ${group.id} ignorado: participantes ativos insuficientes (${participants.length}).`
     );
+    await notifyTelegramSafely(
+      env,
+      templateDrawError({
+        groupLabel: group.titulo || group.slug || group.id,
+        reason: `participantes ativos insuficientes (${participants.length})`,
+      })
+    );
     return;
   }
 
@@ -103,6 +143,13 @@ const runAutomaticDraw = async (env: Env, group: GroupRow) => {
   const assignments = buildAssignments(participants);
   if (!assignments) {
     console.error(`Não foi possível gerar pares válidos para o grupo ${group.id}.`);
+    await notifyTelegramSafely(
+      env,
+      templateDrawError({
+        groupLabel: group.titulo || group.slug || group.id,
+        reason: "não foi possível gerar pares válidos",
+      })
+    );
     return;
   }
 

@@ -8,6 +8,10 @@ import {
 	sendDrawCompletedWhatsApp,
 	sendSecretMessageWhatsApp
 } from '../shared/utils/whatsapp-cloud';
+import {
+	notifyTelegramSafely,
+	templateDrawError
+} from '../shared/utils/telegram';
 import { isHtmxRequest, isAjaxRequest, respondJson, respondText, hxRedirect } from './http/htmx';
 import { createNotification } from './notifications';
 import { countAcceptedInvites, findInviteById, updateInviteSentAt, deleteInvite, findInvitePhoneByEmail, findInvitePhonesByGroup } from './repositories/invite-repository';
@@ -15,6 +19,17 @@ import { insertGroupMessage, insertSecretMessage, findUserContact } from './repo
 import { findActiveParticipantIds, findParticipantContacts, performDraw } from './repositories/draw-repository';
 import { deactivateGroup } from './repositories/group-repository';
 import type { FelizNatalEnv, GrupoRow } from './types';
+
+const notifyDrawError = async (
+	env: FelizNatalEnv,
+	groupLabel: string,
+	reason: string
+) => {
+	await notifyTelegramSafely(
+		env as Record<string, unknown>,
+		templateDrawError({ groupLabel, reason })
+	);
+};
 
 export type GroupActionContext = {
 	env: FelizNatalEnv;
@@ -203,6 +218,11 @@ async function handleDraw(
 
 		if (!drawResult) {
 			state.drawError = 'Não foi possível concluir o sorteio. Tente novamente.';
+			await notifyDrawError(
+				ctx.env,
+				ctx.grupoRow.titulo || ctx.grupoRow.slug || ctx.groupId,
+				state.drawError
+			);
 			if (htmx) return { type: 'response', response: respondText(state.drawError, 400) };
 			if (ajax) return { type: 'response', response: respondJson({ ok: false, error: state.drawError }, 400) };
 			return { type: 'continue', state };
@@ -311,6 +331,12 @@ async function handleDraw(
 	} catch (error) {
 		console.error('Erro ao realizar o sorteio do grupo:', error);
 		state.drawError = 'Não foi possível realizar o sorteio agora.';
+		const detail = error instanceof Error ? error.message : state.drawError;
+		await notifyDrawError(
+			ctx.env,
+			ctx.grupoRow.titulo || ctx.grupoRow.slug || ctx.groupId,
+			detail.slice(0, 200)
+		);
 		if (htmx) {
 			return {
 				type: 'response',
